@@ -1,17 +1,23 @@
 """
-Clustering Module
-Implements K-Means experiments across k=2..12, multi-metric evaluation (Inertia,
-Silhouette, Davies-Bouldin), random seed stability analysis, and cluster centroid
-representative exemplar extraction.
+Clustering Module for Object Discovery Lab
+Implements interactive K-Means clustering, multi-metric evaluation (Inertia,
+Silhouette, Davies-Bouldin, Calinski-Harabasz), Elbow/Silhouette sweeps,
+random seed stability analysis, and centroid exemplar extraction.
 """
 
 import sys
 import time
 from pathlib import Path
+from typing import Tuple, Dict, Any, List, Optional
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score, davies_bouldin_score, adjusted_rand_score
+from sklearn.metrics import (
+    silhouette_score,
+    davies_bouldin_score,
+    calinski_harabasz_score,
+    adjusted_rand_score
+)
 from scipy.spatial.distance import cdist
 import joblib
 
@@ -20,234 +26,233 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import (
-    EMBEDDINGS_DIR,
-    CLUSTERS_DIR,
-    METRICS_DIR,
-    MODELS_DIR,
-    MANIFEST_FILE,
-    K_RANGE,
-    RANDOM_SEED,
-    STABILITY_SEEDS,
-    DEFAULT_K,
-    KMEANS_BEST_MODEL_PATH
-)
+from src.config import RANDOM_SEED, STABILITY_SEEDS, DEFAULT_K
 
 
-def evaluate_kmeans_grid(features, feature_label="PCA-95%"):
+class ClusteringEngine:
     """
-    Evaluates K-Means clustering across k=2..12.
-    Computes WCSS (Inertia), Silhouette Score, and Davies-Bouldin Index.
+    Interactive Clustering Engine supporting dynamic K-Means configurations and exemplar extraction.
     """
-    print("=" * 65)
-    print(f"Evaluating K-Means Clustering on {feature_label} (k=2..12)...")
 
-    results = []
+    def __init__(self, random_state: int = RANDOM_SEED):
+        self.random_state = random_state
+        self.model = None
+        self.labels_ = None
+        self.centroids_ = None
 
-    for k in K_RANGE:
+    def fit_predict(
+        self,
+        X: np.ndarray,
+        k: int = DEFAULT_K,
+        init_method: str = "k-means++",
+        n_init: int = 10,
+        max_iter: int = 300
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """
+        Fits K-Means and returns cluster labels and full evaluation metrics.
+        """
+        n_samples = X.shape[0]
+        safe_k = min(max(int(k), 2), max(n_samples - 1, 2))
+
         t0 = time.time()
         kmeans = KMeans(
-            n_clusters=k,
-            init="k-means++",
-            n_init=10,
-            max_iter=300,
-            random_state=RANDOM_SEED
+            n_clusters=safe_k,
+            init=init_method,
+            n_init=max(int(n_init), 1),
+            max_iter=max(int(max_iter), 50),
+            random_state=self.random_state
         )
-        labels = kmeans.fit_predict(features)
+        labels = kmeans.fit_predict(X)
         elapsed = time.time() - t0
 
+        self.model = kmeans
+        self.labels_ = labels
+        self.centroids_ = kmeans.cluster_centers_
+
         inertia = float(kmeans.inertia_)
-        sil = float(silhouette_score(features, labels))
-        db = float(davies_bouldin_score(features, labels))
+        
+        # Calculate cluster metrics safely
+        unique_labels = np.unique(labels)
+        if len(unique_labels) > 1 and len(unique_labels) < n_samples:
+            try:
+                sil = float(silhouette_score(X, labels))
+            except Exception:
+                sil = np.nan
 
-        # Save assignment for each k
-        np.save(CLUSTERS_DIR / f"labels_{feature_label}_k{k}.npy", labels)
+            try:
+                db = float(davies_bouldin_score(X, labels))
+            except Exception:
+                db = np.nan
 
-        results.append({
-            "k": k,
-            "Representation": feature_label,
-            "WCSS_Inertia": round(inertia, 2),
-            "Silhouette_Score": round(sil, 4),
-            "Davies_Bouldin_Index": round(db, 4),
-            "Fit_Time_Seconds": round(elapsed, 2)
-        })
-        print(f"  k={k:2d} | WCSS: {inertia:10.1f} | Silhouette: {sil:.4f} | Davies-Bouldin: {db:.4f} | Time: {elapsed:.2f}s")
+            try:
+                ch = float(calinski_harabasz_score(X, labels))
+            except Exception:
+                ch = np.nan
+        else:
+            sil, db, ch = np.nan, np.nan, np.nan
 
-    df_results = pd.DataFrame(results)
-    return df_results
+        # Cluster size breakdown
+        sizes = [int(np.sum(labels == c)) for c in range(safe_k)]
+        size_dist = {f"Cluster_{c}": s for c, s in enumerate(sizes)}
 
+        metrics = {
+            "k": safe_k,
+            "inertia_wcss": round(inertia, 2),
+            "silhouette_score": round(sil, 4) if not np.isnan(sil) else "N/A",
+            "davies_bouldin_index": round(db, 4) if not np.isnan(db) else "N/A",
+            "calinski_harabasz_score": round(ch, 2) if not np.isnan(ch) else "N/A",
+            "fit_time_seconds": round(elapsed, 3),
+            "cluster_sizes": size_dist,
+            "min_cluster_size": min(sizes),
+            "max_cluster_size": max(sizes)
+        }
 
-def compare_pca_thresholds_clustering():
-    """
-    Compares clustering performance on PCA-90% vs PCA-95% features.
-    """
-    feats_90 = np.load(EMBEDDINGS_DIR / "pca_90_features.npy")
-    feats_95 = np.load(EMBEDDINGS_DIR / "pca_95_features.npy")
+        return labels, metrics
 
-    df_90 = evaluate_kmeans_grid(feats_90, feature_label="PCA-90")
-    df_95 = evaluate_kmeans_grid(feats_95, feature_label="PCA-95")
+    def run_k_sweep(
+        self,
+        X: np.ndarray,
+        k_min: int = 2,
+        k_max: int = 12,
+        init_method: str = "k-means++",
+        n_init: int = 10
+    ) -> pd.DataFrame:
+        """
+        Runs multi-K evaluation sweep from k_min to k_max.
+        Calculates WCSS (Elbow), Silhouette, Davies-Bouldin, and Calinski-Harabasz.
+        """
+        n_samples = X.shape[0]
+        max_k_allowed = min(k_max, n_samples - 1)
+        results = []
 
-    df_combined = pd.concat([df_90, df_95], ignore_index=True)
-    out_path = METRICS_DIR / "kmeans_metrics_comparison.csv"
-    df_combined.to_csv(out_path, index=False)
-    print(f"\nSaved K-Means multi-metric comparison -> {out_path}")
-    return df_combined
+        for k in range(k_min, max_k_allowed + 1):
+            km = KMeans(
+                n_clusters=k,
+                init=init_method,
+                n_init=n_init,
+                random_state=self.random_state
+            )
+            lbls = km.fit_predict(X)
+            inertia = float(km.inertia_)
 
+            try:
+                sil = float(silhouette_score(X, lbls))
+            except Exception:
+                sil = np.nan
 
-def test_seed_stability(features=None, k=DEFAULT_K):
-    """
-    Evaluates sensitivity of K-Means to random initialization seeds [21, 42, 100, 123].
-    Computes pairwise Adjusted Rand Index (ARI) between independent runs.
-    """
-    print("=" * 65)
-    print(f"Testing K-Means Random Seed Stability for k={k} across seeds {STABILITY_SEEDS}...")
+            try:
+                db = float(davies_bouldin_score(X, lbls))
+            except Exception:
+                db = np.nan
 
-    if features is None:
-        features = np.load(EMBEDDINGS_DIR / "pca_95_features.npy")
+            try:
+                ch = float(calinski_harabasz_score(X, lbls))
+            except Exception:
+                ch = np.nan
 
-    run_labels = {}
-    run_metrics = []
-
-    for seed in STABILITY_SEEDS:
-        km = KMeans(
-            n_clusters=k,
-            init="k-means++",
-            n_init=10,
-            max_iter=300,
-            random_state=seed
-        )
-        lbls = km.fit_predict(features)
-        run_labels[seed] = lbls
-        inertia = float(km.inertia_)
-        sil = float(silhouette_score(features, lbls))
-
-        # Size distribution
-        sizes = [int(np.sum(lbls == c)) for c in range(k)]
-        min_size, max_size = min(sizes), max(sizes)
-
-        run_metrics.append({
-            "Random_Seed": seed,
-            "WCSS_Inertia": round(inertia, 2),
-            "Silhouette_Score": round(sil, 4),
-            "Min_Cluster_Size": min_size,
-            "Max_Cluster_Size": max_size,
-            "Cluster_Sizes": str(sizes)
-        })
-
-    df_seeds = pd.DataFrame(run_metrics)
-    df_seeds.to_csv(METRICS_DIR / "seed_stability_metrics.csv", index=False)
-
-    # Compute Pairwise Adjusted Rand Index (ARI) Matrix between runs
-    n_seeds = len(STABILITY_SEEDS)
-    ari_matrix = np.zeros((n_seeds, n_seeds))
-
-    for i, s1 in enumerate(STABILITY_SEEDS):
-        for j, s2 in enumerate(STABILITY_SEEDS):
-            ari_matrix[i, j] = adjusted_rand_score(run_labels[s1], run_labels[s2])
-
-    df_ari = pd.DataFrame(
-        np.round(ari_matrix, 4),
-        index=[f"Seed_{s}" for s in STABILITY_SEEDS],
-        columns=[f"Seed_{s}" for s in STABILITY_SEEDS]
-    )
-    df_ari.to_csv(METRICS_DIR / "seed_pairwise_ari.csv")
-
-    print("\nRandom Seed Stability Summary:")
-    print(df_seeds.to_string(index=False))
-    print("\nPairwise ARI Agreement Between Random Initializations:")
-    print(df_ari.to_string())
-
-    return df_seeds, df_ari
-
-
-def fit_best_model_and_extract_exemplars(features=None, k=DEFAULT_K):
-    """
-    Fits the definitive K-Means model on PCA-95% features at optimal k.
-    Extracts 8-12 representative images closest to each cluster centroid.
-    """
-    print("=" * 65)
-    print(f"Fitting Definitive K-Means Model at k={k} and Extracting Exemplars...")
-
-    if features is None:
-        features = np.load(EMBEDDINGS_DIR / "pca_95_features.npy")
-
-    df_manifest = pd.read_csv(MANIFEST_FILE)
-    image_ids = df_manifest["image_id"].values
-    file_paths = df_manifest["file_path"].values
-
-    kmeans = KMeans(
-        n_clusters=k,
-        init="k-means++",
-        n_init=20,
-        max_iter=300,
-        random_state=RANDOM_SEED
-    )
-    labels = kmeans.fit_predict(features)
-    centroids = kmeans.cluster_centers_
-
-    # Save definitive model & assignments
-    joblib.dump(kmeans, KMEANS_BEST_MODEL_PATH)
-    np.save(MODELS_DIR / "kmeans_centroids.npy", centroids)
-    np.save(CLUSTERS_DIR / f"final_cluster_labels_k{k}.npy", labels)
-
-    df_manifest_assigned = df_manifest.copy()
-    df_manifest_assigned["Cluster_ID"] = labels
-    df_manifest_assigned.to_csv(CLUSTERS_DIR / "final_manifest_with_clusters.csv", index=False)
-
-    # For each cluster, compute distance of all assigned members to its centroid
-    exemplars = []
-
-    for c in range(k):
-        member_indices = np.where(labels == c)[0]
-        cluster_size = len(member_indices)
-        cluster_feats = features[member_indices]
-        centroid = centroids[c:c+1]
-
-        # Euclidean distances
-        distances = cdist(cluster_feats, centroid, metric="euclidean").flatten()
-        sorted_order = np.argsort(distances)
-        top_k_indices = member_indices[sorted_order[:12]]
-        top_distances = distances[sorted_order[:12]]
-
-        for rank, (idx, dist) in enumerate(zip(top_k_indices, top_distances), start=1):
-            exemplars.append({
-                "Cluster_ID": c,
-                "Rank": rank,
-                "Image_ID": image_ids[idx],
-                "File_Path": file_paths[idx],
-                "Distance_To_Centroid": round(float(dist), 4),
-                "Cluster_Total_Size": cluster_size
+            results.append({
+                "k": k,
+                "WCSS_Inertia": round(inertia, 2),
+                "Silhouette_Score": round(sil, 4),
+                "Davies_Bouldin_Index": round(db, 4),
+                "Calinski_Harabasz_Score": round(ch, 2)
             })
 
-    df_exemplars = pd.DataFrame(exemplars)
-    df_exemplars.to_csv(METRICS_DIR / "cluster_representative_images.csv", index=False)
+        return pd.DataFrame(results)
 
-    # Cluster summary
-    summary = []
-    for c in range(k):
-        members = np.where(labels == c)[0]
-        summary.append({
-            "Cluster_ID": c,
-            "Size": len(members),
-            "Percentage (%)": round((len(members) / len(labels)) * 100, 2),
-            "Mean_Centroid_Distance": round(float(np.mean(cdist(features[members], centroids[c:c+1]))), 3)
-        })
-    df_summary = pd.DataFrame(summary)
-    df_summary.to_csv(METRICS_DIR / "cluster_profiles.csv", index=False)
+    def test_seed_stability(
+        self,
+        X: np.ndarray,
+        k: int = DEFAULT_K,
+        seeds: Optional[List[int]] = None
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Runs K-Means across distinct initialization seeds.
+        Computes pairwise Adjusted Rand Index (ARI) matrix to quantify cluster stability.
+        """
+        if seeds is None:
+            seeds = STABILITY_SEEDS
 
-    print("\nCluster Profile Summary:")
-    print(df_summary.to_string(index=False))
-    print(f"\nSaved Representative Exemplars -> {METRICS_DIR / 'cluster_representative_images.csv'}")
+        run_labels = {}
+        run_stats = []
 
-    return kmeans, labels, df_exemplars, df_summary
+        for s in seeds:
+            km = KMeans(n_clusters=k, init="k-means++", n_init=10, random_state=s)
+            lbls = km.fit_predict(X)
+            run_labels[s] = lbls
 
+            sil = float(silhouette_score(X, lbls)) if X.shape[0] > k else np.nan
+            sizes = [int(np.sum(lbls == c)) for c in range(k)]
 
-def run_clustering_pipeline():
-    df_comparison = compare_pca_thresholds_clustering()
-    test_seed_stability()
-    kmeans, labels, df_exemplars, df_summary = fit_best_model_and_extract_exemplars(k=DEFAULT_K)
-    return df_comparison, df_exemplars
+            run_stats.append({
+                "Seed": s,
+                "Inertia_WCSS": round(float(km.inertia_), 2),
+                "Silhouette": round(sil, 4) if not np.isnan(sil) else "N/A",
+                "Min_Cluster_Size": min(sizes),
+                "Max_Cluster_Size": max(sizes)
+            })
 
+        df_stats = pd.DataFrame(run_stats)
 
-if __name__ == "__main__":
-    run_clustering_pipeline()
+        # Pairwise ARI matrix
+        n_seeds = len(seeds)
+        ari_mat = np.zeros((n_seeds, n_seeds))
+        for i, s1 in enumerate(seeds):
+            for j, s2 in enumerate(seeds):
+                ari_mat[i, j] = adjusted_rand_score(run_labels[s1], run_labels[s2])
+
+        df_ari = pd.DataFrame(
+            np.round(ari_mat, 4),
+            index=[f"Seed_{s}" for s in seeds],
+            columns=[f"Seed_{s}" for s in seeds]
+        )
+
+        return df_stats, df_ari
+
+    def extract_centroid_exemplars(
+        self,
+        X: np.ndarray,
+        df_manifest: pd.DataFrame,
+        top_n: int = 12
+    ) -> pd.DataFrame:
+        """
+        Extracts top N images closest to each cluster centroid in Euclidean feature space.
+        """
+        if self.centroids_ is None or self.labels_ is None:
+            raise RuntimeError("Must fit K-Means model before extracting exemplars.")
+
+        exemplar_records = []
+        k = self.centroids_.shape[0]
+        image_ids = df_manifest["image_id"].values
+        file_paths = df_manifest["file_path"].values
+
+        for c in range(k):
+            members = np.where(self.labels_ == c)[0]
+            if len(members) == 0:
+                continue
+
+            c_feats = X[members]
+            centroid = self.centroids_[c:c+1]
+            distances = cdist(c_feats, centroid, metric="euclidean").flatten()
+            sorted_idx = np.argsort(distances)
+
+            n_extract = min(top_n, len(members))
+            top_members = members[sorted_idx[:n_extract]]
+            top_dists = distances[sorted_idx[:n_extract]]
+
+            for rank, (m_idx, d_val) in enumerate(zip(top_members, top_dists), start=1):
+                exemplar_records.append({
+                    "Cluster_ID": c,
+                    "Rank": rank,
+                    "Image_ID": str(image_ids[m_idx]),
+                    "File_Path": str(file_paths[m_idx]),
+                    "Distance_To_Centroid": round(float(d_val), 4),
+                    "Cluster_Total_Size": len(members)
+                })
+
+        return pd.DataFrame(exemplar_records)
+
+    def save(self, model_path: Path):
+        """Saves fitted KMeans model."""
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(self.model, model_path)

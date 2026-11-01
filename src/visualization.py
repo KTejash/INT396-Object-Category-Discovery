@@ -1,281 +1,209 @@
 """
-Visualization Module
-Generates high-resolution publication-quality figures for PCA, t-SNE,
-K-Means elbow/silhouette curves, cluster galleries, and post-hoc contingency heatmaps.
+Visualization Module for Object Discovery Lab
+Builds high-performance interactive Plotly charts for the Streamlit dashboard
+and static publication-grade Matplotlib plots.
 """
 
 import sys
 from pathlib import Path
+from typing import Optional, List, Dict, Any
 import numpy as np
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 import seaborn as sns
-from PIL import Image
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import (
-    FIGURES_DIR,
-    METRICS_DIR,
-    EMBEDDINGS_DIR,
-    CLUSTERS_DIR,
-    GROUND_TRUTH_FILE,
-    MANIFEST_FILE,
-    TSNE_PERPLEXITIES,
-    TSNE_LEARNING_RATES,
-    DEFAULT_K
+DARK_LAYOUT = dict(
+    template="plotly_dark",
+    plot_bgcolor="#101c3d",
+    paper_bgcolor="#101c3d",
+    font=dict(color="#e0e6ed", family="Inter, sans-serif"),
+    margin=dict(l=40, r=40, t=50, b=40)
 )
 
-# Set global publication styling
-plt.style.use("seaborn-v0_8-whitegrid" if "seaborn-v0_8-whitegrid" in plt.style.available else "default")
-plt.rcParams.update({
-    "font.family": "sans-serif",
-    "font.size": 11,
-    "axes.titlesize": 13,
-    "axes.labelsize": 12,
-    "xtick.labelsize": 10,
-    "ytick.labelsize": 10,
-    "legend.fontsize": 10,
-    "figure.titlesize": 15,
-    "figure.dpi": 300,
-    "savefig.dpi": 300,
-    "savefig.bbox": "tight"
-})
 
-PALETTE = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
+def plot_scree_interactive(df_scree: pd.DataFrame, target_var: Optional[float] = None) -> go.Figure:
+    """Builds interactive scree curve showing individual and cumulative explained variance."""
+    fig = go.Figure()
 
+    fig.add_trace(go.Bar(
+        x=df_scree["Component"][:50],
+        y=df_scree["Individual_Variance_Ratio"][:50] * 100,
+        name="Individual Variance (%)",
+        marker_color="#00b4d8",
+        opacity=0.7
+    ))
 
-def plot_data_quality():
-    """Generates figure for dataset distribution and dimension checks."""
-    dims_file = METRICS_DIR / "image_dimensions.csv"
-    gt_file = METRICS_DIR / "class_distribution.csv"
+    fig.add_trace(go.Scatter(
+        x=df_scree["Component"],
+        y=df_scree["Cumulative_Variance_Ratio"] * 100,
+        name="Cumulative Variance (%)",
+        mode="lines+markers",
+        line=dict(color="#48cae4", width=3),
+        yaxis="y2"
+    ))
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    if target_var is not None:
+        fig.add_hline(
+            y=target_var * 100,
+            line_dash="dash",
+            line_color="#ffb703",
+            annotation_text=f"Target: {int(target_var*100)}%",
+            annotation_position="bottom right",
+            yref="y2"
+        )
 
-    if gt_file.exists():
-        df_dist = pd.read_csv(gt_file)
-        sns.barplot(data=df_dist, x="Category", y="Image Count", palette="viridis", ax=axes[0])
-        axes[0].set_title("Dataset Balance Across 8 Object Categories", fontweight="bold")
-        axes[0].set_xticklabels(axes[0].get_xticklabels(), rotation=30, ha="right")
-        for p in axes[0].patches:
-            axes[0].annotate(f"{int(p.get_height())}", (p.get_x() + p.get_width() / 2., p.get_height()),
-                             ha='center', va='bottom', xytext=(0, 3), textcoords='offset points')
-    else:
-        axes[0].text(0.5, 0.5, "Class distribution data pending", ha="center")
-
-    if dims_file.exists():
-        df_dims = pd.read_csv(dims_file)
-        sns.scatterplot(data=df_dims, x="width", y="height", alpha=0.4, color="#1f77b4", ax=axes[1])
-        axes[1].set_title("Original Image Resolutions (px)", fontweight="bold")
-        axes[1].set_xlabel("Width (px)")
-        axes[1].set_ylabel("Height (px)")
-    else:
-        axes[1].text(0.5, 0.5, "Image dimension data pending", ha="center")
-
-    plt.tight_layout()
-    out = FIGURES_DIR / "fig01_data_quality_and_balance.png"
-    plt.savefig(out)
-    plt.close()
-    print(f"Saved: {out.name}")
+    fig.update_layout(
+        title="PCA Scree Curve: Individual & Cumulative Explained Variance",
+        xaxis=dict(title="Principal Component"),
+        yaxis=dict(title="Individual Variance (%)", side="left"),
+        yaxis2=dict(title="Cumulative Variance (%)", side="right", overlaying="y", range=[0, 105]),
+        legend=dict(x=0.02, y=0.98),
+        **DARK_LAYOUT
+    )
+    return fig
 
 
-def plot_pca_variance():
-    """Generates explained variance curves for PCA with 90% and 95% marked."""
-    curve_file = METRICS_DIR / "pca_full_curve.csv"
-    if not curve_file.exists():
-        print("PCA curve data not found. Skipping plot.")
-        return
+def plot_embedding_2d_interactive(
+    coords_2d: np.ndarray,
+    labels: Optional[np.ndarray] = None,
+    hover_names: Optional[List[str]] = None,
+    title: str = "2D Feature Embedding"
+) -> go.Figure:
+    """Builds interactive 2D scatter plot colored by cluster or label."""
+    df_plot = pd.DataFrame({
+        "Dim_1": coords_2d[:, 0],
+        "Dim_2": coords_2d[:, 1],
+        "Group": [f"Cluster {c}" if isinstance(c, (int, np.integer)) else str(c) for c in (labels if labels is not None else np.zeros(len(coords_2d), dtype=int))],
+        "Image_ID": hover_names if hover_names is not None else [f"Img_{i}" for i in range(len(coords_2d))]
+    })
 
-    df = pd.read_csv(curve_file)
-    n_90 = int(np.argmax(df["Cumulative_Explained_Variance"] >= 0.90) + 1)
-    n_95 = int(np.argmax(df["Cumulative_Explained_Variance"] >= 0.95) + 1)
-
-    fig, axes = plt.subplots(1, 2, figsize=(15, 5))
-
-    # Individual variance
-    axes[0].plot(df["Component"][:100], df["Explained_Variance_Ratio"][:100] * 100, color="#1f77b4", lw=2)
-    axes[0].set_title("Individual Explained Variance (First 100 PCs)", fontweight="bold")
-    axes[0].set_xlabel("Principal Component Index")
-    axes[0].set_ylabel("Explained Variance Ratio (%)")
-
-    # Cumulative variance
-    axes[1].plot(df["Component"], df["Cumulative_Explained_Variance"] * 100, color="#2ca02c", lw=2.5, label="Cumulative Variance")
-    axes[1].axhline(90, color="#ff7f0e", linestyle="--", label=f"90% Threshold (n={n_90})")
-    axes[1].axvline(n_90, color="#ff7f0e", linestyle="--")
-    axes[1].axhline(95, color="#d62728", linestyle=":", label=f"95% Threshold (n={n_95})")
-    axes[1].axvline(n_95, color="#d62728", linestyle=":")
-
-    axes[1].set_title("Cumulative Explained Variance & Retention Thresholds", fontweight="bold")
-    axes[1].set_xlabel("Principal Component Count")
-    axes[1].set_ylabel("Cumulative Variance (%)")
-    axes[1].legend(loc="lower right")
-
-    plt.tight_layout()
-    out = FIGURES_DIR / "fig03_pca_explained_variance.png"
-    plt.savefig(out)
-    plt.close()
-    print(f"Saved: {out.name}")
+    fig = px.scatter(
+        df_plot,
+        x="Dim_1",
+        y="Dim_2",
+        color="Group",
+        hover_data=["Image_ID"],
+        opacity=0.75,
+        title=title,
+        color_discrete_sequence=px.colors.qualitative.Dark24
+    )
+    fig.update_traces(marker=dict(size=7))
+    fig.update_layout(**DARK_LAYOUT)
+    return fig
 
 
-def plot_tsne_grid():
-    """Generates 6-panel grid for t-SNE parameter combinations."""
-    labels_file = CLUSTERS_DIR / f"final_cluster_labels_k{DEFAULT_K}.npy"
-    labels = np.load(labels_file) if labels_file.exists() else None
+def plot_k_sweep_metrics(df_sweep: pd.DataFrame) -> go.Figure:
+    """Builds interactive multi-line chart for K-Means sweep across k=2..12."""
+    fig = go.Figure()
 
-    fig, axes = plt.subplots(2, 3, figsize=(18, 11))
-    axes = axes.flatten()
+    fig.add_trace(go.Scatter(
+        x=df_sweep["k"],
+        y=df_sweep["Silhouette_Score"],
+        mode="lines+markers",
+        name="Silhouette Score (Higher is Better)",
+        line=dict(color="#48cae4", width=3)
+    ))
 
-    idx = 0
-    for lr in TSNE_LEARNING_RATES:
-        for perp in TSNE_PERPLEXITIES:
-            ax = axes[idx]
-            emb_file = EMBEDDINGS_DIR / f"tsne_perp{perp}_lr{lr}.npy"
-            if emb_file.exists():
-                coords = np.load(emb_file)
-                scatter = ax.scatter(
-                    coords[:, 0], coords[:, 1],
-                    c=labels if labels is not None else "#1f77b4",
-                    cmap="tab10" if labels is not None else None,
-                    alpha=0.6, s=12
-                )
-                ax.set_title(f"Perplexity = {perp} | Learning Rate = {lr}", fontweight="bold", fontsize=11)
-                ax.set_xticks([])
-                ax.set_yticks([])
-            else:
-                ax.text(0.5, 0.5, "Embedding not generated", ha="center")
-            idx += 1
+    fig.add_trace(go.Scatter(
+        x=df_sweep["k"],
+        y=df_sweep["Davies_Bouldin_Index"],
+        mode="lines+markers",
+        name="Davies-Bouldin Index (Lower is Better)",
+        line=dict(color="#ffb703", width=3)
+    ))
 
-    fig.suptitle("t-SNE Hyperparameter Grid: Perplexity {5, 30, 50} x Learning Rate {100, 200}", fontsize=15, fontweight="bold")
-    plt.tight_layout()
-    out = FIGURES_DIR / "fig05_tsne_parameter_grid.png"
-    plt.savefig(out)
-    plt.close()
-    print(f"Saved: {out.name}")
+    fig.update_layout(
+        title="Clustering Metric Comparison Across Cluster Counts (k=2..12)",
+        xaxis=dict(title="Number of Clusters (k)", tickmode="linear", dtick=1),
+        yaxis=dict(title="Metric Score"),
+        legend=dict(x=0.02, y=0.98),
+        **DARK_LAYOUT
+    )
+    return fig
 
 
-def plot_pca_vs_tsne():
-    """Generates comparative side-by-side visualization of PCA 2D vs t-SNE 2D."""
-    pca_file = EMBEDDINGS_DIR / "pca_2d.npy"
-    tsne_file = EMBEDDINGS_DIR / "tsne_perp30_lr200.npy"
-    labels_file = CLUSTERS_DIR / f"final_cluster_labels_k{DEFAULT_K}.npy"
-
-    if not (pca_file.exists() and tsne_file.exists() and labels_file.exists()):
-        print("PCA/t-SNE embeddings missing. Skipping PCA vs t-SNE plot.")
-        return
-
-    pca_2d = np.load(pca_file)
-    tsne_2d = np.load(tsne_file)
-    labels = np.load(labels_file)
-
-    fig, axes = plt.subplots(1, 2, figsize=(16, 7))
-
-    # PCA 2D
-    scatter0 = axes[0].scatter(pca_2d[:, 0], pca_2d[:, 1], c=labels, cmap="tab10", alpha=0.6, s=15)
-    axes[0].set_title("Global Linear Projection: PCA 2D Space", fontweight="bold")
-    axes[0].set_xlabel("Principal Component 1")
-    axes[0].set_ylabel("Principal Component 2")
-
-    # t-SNE 2D
-    scatter1 = axes[1].scatter(tsne_2d[:, 0], tsne_2d[:, 1], c=labels, cmap="tab10", alpha=0.6, s=15)
-    axes[1].set_title("Non-Linear Manifold: t-SNE 2D Space (Perp=30, LR=200)", fontweight="bold")
-    axes[1].set_xlabel("t-SNE Dimension 1")
-    axes[1].set_ylabel("t-SNE Dimension 2")
-
-    fig.suptitle("Dimensionality Reduction Comparison: Global PCA vs Local Manifold t-SNE", fontsize=15, fontweight="bold")
-    plt.tight_layout()
-    out = FIGURES_DIR / "fig06_pca_vs_tsne_comparison.png"
-    plt.savefig(out)
-    plt.close()
-    print(f"Saved: {out.name}")
+def plot_elbow_wcss(df_sweep: pd.DataFrame) -> go.Figure:
+    """Builds interactive Elbow (WCSS) plot."""
+    fig = px.line(
+        df_sweep,
+        x="k",
+        y="WCSS_Inertia",
+        markers=True,
+        title="Elbow Method: Within-Cluster Sum of Squares (WCSS)",
+        labels={"WCSS_Inertia": "Inertia / WCSS", "k": "Cluster Count (k)"}
+    )
+    fig.update_traces(line=dict(color="#00b4d8", width=3), marker=dict(size=8, color="#ffb703"))
+    fig.update_layout(**DARK_LAYOUT)
+    return fig
 
 
-def plot_kmeans_evaluation():
-    """Generates Elbow curve, Silhouette curve, and Davies-Bouldin curve across k."""
-    metrics_file = METRICS_DIR / "kmeans_metrics_comparison.csv"
-    if not metrics_file.exists():
-        print("Clustering comparison metrics missing. Skipping.")
-        return
+def plot_cluster_distribution(labels: np.ndarray) -> go.Figure:
+    """Builds interactive bar chart of cluster sizes."""
+    unique, counts = np.unique(labels, return_counts=True)
+    df_sizes = pd.DataFrame({
+        "Cluster": [f"Cluster {c}" for c in unique],
+        "Image_Count": counts,
+        "Percentage": np.round((counts / len(labels)) * 100, 2)
+    })
 
-    df = pd.read_csv(metrics_file)
-
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-
-    # 1. Elbow (WCSS)
-    sns.lineplot(data=df, x="k", y="WCSS_Inertia", hue="Representation", marker="o", lw=2, ax=axes[0])
-    axes[0].set_title("Elbow Method: Within-Cluster Sum of Squares", fontweight="bold")
-    axes[0].set_xlabel("Number of Clusters (k)")
-    axes[0].set_ylabel("WCSS / Inertia")
-
-    # 2. Silhouette Score
-    sns.lineplot(data=df, x="k", y="Silhouette_Score", hue="Representation", marker="s", lw=2, ax=axes[1])
-    axes[1].set_title("Silhouette Score Comparison (Higher is Better)", fontweight="bold")
-    axes[1].set_xlabel("Number of Clusters (k)")
-    axes[1].set_ylabel("Mean Silhouette Score")
-
-    # 3. Davies-Bouldin Index
-    sns.lineplot(data=df, x="k", y="Davies_Bouldin_Index", hue="Representation", marker="^", lw=2, ax=axes[2])
-    axes[2].set_title("Davies-Bouldin Index (Lower is Better)", fontweight="bold")
-    axes[2].set_xlabel("Number of Clusters (k)")
-    axes[2].set_ylabel("Davies-Bouldin Score")
-
-    plt.tight_layout()
-    out = FIGURES_DIR / "fig07_kmeans_evaluation_metrics.png"
-    plt.savefig(out)
-    plt.close()
-    print(f"Saved: {out.name}")
+    fig = px.bar(
+        df_sizes,
+        x="Cluster",
+        y="Image_Count",
+        text="Percentage",
+        color="Cluster",
+        color_discrete_sequence=px.colors.qualitative.Prism,
+        title="Cluster Size & Member Distribution"
+    )
+    fig.update_traces(texttemplate="%{text}%", textposition="outside")
+    fig.update_layout(showlegend=False, **DARK_LAYOUT)
+    return fig
 
 
-def plot_seed_stability_heatmap():
-    """Generates heatmap of pairwise ARI across random seeds."""
-    ari_file = METRICS_DIR / "seed_pairwise_ari.csv"
-    if not ari_file.exists():
-        return
-
-    df_ari = pd.read_csv(ari_file, index_col=0)
-    plt.figure(figsize=(7, 6))
-    sns.heatmap(df_ari, annot=True, fmt=".4f", cmap="Blues", cbar=True, vmin=0.5, vmax=1.0)
-    plt.title("K-Means Initialization Stability:\nPairwise Adjusted Rand Index Across Seeds", fontweight="bold")
-    plt.tight_layout()
-    out = FIGURES_DIR / "fig09_seed_stability_ari.png"
-    plt.savefig(out)
-    plt.close()
-    print(f"Saved: {out.name}")
+def plot_contingency_heatmap_interactive(df_cont_norm: pd.DataFrame) -> go.Figure:
+    """Builds interactive heatmap of cluster vs ground truth category."""
+    fig = px.imshow(
+        df_cont_norm,
+        text_auto=True,
+        color_continuous_scale="YlGnBu",
+        title="Post-Hoc Contingency Analysis: Ground Truth vs Discovered Clusters (%)",
+        labels=dict(x="Discovered Cluster", y="Ground Truth Category", color="Percentage (%)")
+    )
+    fig.update_layout(**DARK_LAYOUT)
+    return fig
 
 
-def plot_contingency_heatmap():
-    """Generates row-normalized Contingency Heatmap (True Categories vs Discovered Clusters)."""
-    cont_file = METRICS_DIR / "contingency_matrix_normalized.csv"
-    if not cont_file.exists():
-        return
+def plot_experiment_comparison_radar(df_compare: pd.DataFrame) -> go.Figure:
+    """Builds comparative radar or bar chart across experiments."""
+    metrics_to_plot = ["Silhouette Score", "Davies-Bouldin Index", "Adjusted Rand Index (ARI)", "Normalized Mutual Info (NMI)"]
+    
+    fig = go.Figure()
+    for col in df_compare.columns:
+        vals = []
+        for m in metrics_to_plot:
+            v = df_compare.loc[m, col] if m in df_compare.index else 0
+            try:
+                vals.append(float(v))
+            except Exception:
+                vals.append(0.0)
 
-    df_cont = pd.read_csv(cont_file, index_col=0)
-    plt.figure(figsize=(10, 7))
-    sns.heatmap(df_cont, annot=True, fmt=".1f", cmap="YlGnBu", cbar_kws={'label': 'Percentage of True Category (%)'})
-    plt.title("Post-Hoc Contingency Analysis:\nTrue Object Categories vs Discovered Clusters (%)", fontweight="bold")
-    plt.xlabel("Discovered Unsupervised Clusters")
-    plt.ylabel("Ground-Truth Categories (Revealed Post-Hoc)")
-    plt.tight_layout()
-    out = FIGURES_DIR / "fig11_contingency_heatmap.png"
-    plt.savefig(out)
-    plt.close()
-    print(f"Saved: {out.name}")
+        fig.add_trace(go.Bar(
+            name=str(col),
+            x=metrics_to_plot,
+            y=vals
+        ))
 
-
-def generate_all_figures():
-    print("=" * 65)
-    print("Generating Publication-Ready Figures in outputs/figures/...")
-    plot_data_quality()
-    plot_pca_variance()
-    plot_tsne_grid()
-    plot_pca_vs_tsne()
-    plot_kmeans_evaluation()
-    plot_seed_stability_heatmap()
-    plot_contingency_heatmap()
-    print("All figures successfully rendered and saved.")
-
-
-if __name__ == "__main__":
-    generate_all_figures()
+    fig.update_layout(
+        barmode="group",
+        title="Direct Metric Comparison Across Experiments",
+        yaxis=dict(title="Score"),
+        **DARK_LAYOUT
+    )
+    return fig

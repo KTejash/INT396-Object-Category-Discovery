@@ -1,12 +1,13 @@
 """
-Dimensionality Reduction Module
-Implements Principal Component Analysis (PCA) with 90% & 95% variance thresholds
-and systematic t-SNE experiments across perplexity and learning rate sweeps.
+Dimensionality Reduction Module for Object Discovery Lab
+Implements interactive Principal Component Analysis (PCA) and t-Distributed
+Stochastic Neighbor Embedding (t-SNE) with strict parameter validation and dynamic recomputation.
 """
 
 import sys
 import time
 from pathlib import Path
+from typing import Tuple, Dict, Any, Optional
 import numpy as np
 import pandas as pd
 from sklearn.decomposition import PCA
@@ -18,164 +19,178 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import (
-    CNN_FEATURES_SCALED,
-    HIST_FEATURES_SCALED,
-    EMBEDDINGS_DIR,
-    MODELS_DIR,
-    METRICS_DIR,
-    RANDOM_SEED,
-    PCA_VARIANCE_THRESHOLDS,
-    TSNE_PERPLEXITIES,
-    TSNE_LEARNING_RATES,
-    TSNE_ITERATIONS,
-    PCA_MODEL_90_PATH,
-    PCA_MODEL_95_PATH
-)
+from src.config import RANDOM_SEED, MODELS_DIR
 
 
-def run_pca_experiments(features=None):
+class PCAManager:
     """
-    Executes PCA on standardized features.
-    Computes individual and cumulative explained variance.
-    Identifies components for 90% and 95% variance thresholds.
+    Interactive PCA engine supporting target variance thresholds or fixed component counts.
     """
-    print("=" * 65)
-    print("Executing Principal Component Analysis (PCA)...")
 
-    if features is None:
-        features = np.load(CNN_FEATURES_SCALED)
+    def __init__(self, random_state: int = RANDOM_SEED):
+        self.random_state = random_state
+        self.pca = None
+        self.explained_variance_ratio_ = None
+        self.cumulative_variance_ = None
+        self.n_components_ = None
 
-    n_samples, n_features = features.shape
-    max_components = min(n_samples, n_features)
+    def fit_transform(
+        self,
+        X: np.ndarray,
+        mode: str = "variance",
+        target_variance: float = 0.95,
+        n_components: int = 50
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """
+        Fits PCA and transforms feature matrix X.
+        Args:
+            X: Standardized input matrix (N, D)
+            mode: 'variance' (e.g. 0.90, 0.95, 0.99) or 'fixed' (explicit integer)
+            target_variance: Float in (0.0, 1.0]
+            n_components: Integer <= min(N, D)
+        """
+        n_samples, n_features = X.shape
+        max_possible = min(n_samples, n_features)
 
-    print(f"Fitting Full PCA on matrix of shape {features.shape}...")
-    pca_full = PCA(n_components=max_components, random_state=RANDOM_SEED)
-    pca_full.fit(features)
+        if max_possible < 2:
+            raise ValueError(f"Insufficient samples or features for PCA: shape={X.shape}")
 
-    exp_var = pca_full.explained_variance_ratio_
-    cum_var = np.cumsum(exp_var)
+        if mode == "variance":
+            target_var = min(max(float(target_variance), 0.05), 0.999)
+            # Fit preliminary or full PCA to determine exact component cutoff
+            pca_pre = PCA(n_components=max_possible, random_state=self.random_state)
+            pca_pre.fit(X)
+            cum_var = np.cumsum(pca_pre.explained_variance_ratio_)
+            k_components = int(np.argmax(cum_var >= target_var) + 1)
+            k_components = min(max(k_components, 2), max_possible)
+        else:
+            k_components = min(max(int(n_components), 2), max_possible)
 
-    # Find components for 90% and 95% variance
-    n_90 = int(np.argmax(cum_var >= 0.90) + 1)
-    n_95 = int(np.argmax(cum_var >= 0.95) + 1)
+        self.pca = PCA(n_components=k_components, random_state=self.random_state)
+        X_pca = self.pca.fit_transform(X).astype(np.float32)
 
-    print(f"  Components for 90% Retained Variance: {n_90} / {n_features} (Compression: {100*(1 - n_90/n_features):.1f}%)")
-    print(f"  Components for 95% Retained Variance: {n_95} / {n_features} (Compression: {100*(1 - n_95/n_features):.1f}%)")
+        self.explained_variance_ratio_ = self.pca.explained_variance_ratio_
+        self.cumulative_variance_ = np.cumsum(self.explained_variance_ratio_)
+        self.n_components_ = k_components
 
-    # Fit and transform for 90% and 95%
-    pca_90 = PCA(n_components=n_90, random_state=RANDOM_SEED)
-    feats_pca_90 = pca_90.fit_transform(features).astype(np.float32)
-    joblib.dump(pca_90, PCA_MODEL_90_PATH)
-    np.save(EMBEDDINGS_DIR / "pca_90_features.npy", feats_pca_90)
+        compression_pct = round((1.0 - (k_components / n_features)) * 100, 2)
+        total_explained_var = round(float(self.cumulative_variance_[-1]) * 100, 2)
 
-    pca_95 = PCA(n_components=n_95, random_state=RANDOM_SEED)
-    feats_pca_95 = pca_95.fit_transform(features).astype(np.float32)
-    joblib.dump(pca_95, PCA_MODEL_95_PATH)
-    np.save(EMBEDDINGS_DIR / "pca_95_features.npy", feats_pca_95)
+        metrics = {
+            "original_dimensions": n_features,
+            "reduced_dimensions": k_components,
+            "compression_ratio": f"{compression_pct}% reduction",
+            "explained_variance_total": f"{total_explained_var}%",
+            "first_pc_variance": round(float(self.explained_variance_ratio_[0]) * 100, 2),
+            "second_pc_variance": round(float(self.explained_variance_ratio_[1]) * 100, 2) if k_components > 1 else 0.0
+        }
 
-    # 2D PCA for visual mapping
-    pca_2d = PCA(n_components=2, random_state=RANDOM_SEED)
-    feats_pca_2d = pca_2d.fit_transform(features).astype(np.float32)
-    np.save(EMBEDDINGS_DIR / "pca_2d.npy", feats_pca_2d)
-
-    # Save Variance Metrics Table
-    var_records = []
-    milestones = [1, 2, 5, 10, 20, 50, n_90, n_95, min(200, max_components), max_components]
-    milestones = sorted(list(set(milestones)))
-
-    for k in milestones:
-        var_records.append({
-            "Principal Component Count": k,
-            "Individual Variance Ratio (%)": round(float(exp_var[k - 1]) * 100, 4),
-            "Cumulative Variance Ratio (%)": round(float(cum_var[k - 1]) * 100, 3)
+        # Build scree curve DataFrame
+        df_scree = pd.DataFrame({
+            "Component": np.arange(1, k_components + 1),
+            "Individual_Variance_Ratio": self.explained_variance_ratio_,
+            "Cumulative_Variance_Ratio": self.cumulative_variance_
         })
 
-    df_var = pd.DataFrame(var_records)
-    df_var.to_csv(METRICS_DIR / "pca_variance_milestones.csv", index=False)
+        return X_pca, {"metrics": metrics, "scree_df": df_scree}
 
-    # Save full curve data for plotting
-    df_curve = pd.DataFrame({
-        "Component": np.arange(1, len(exp_var) + 1),
-        "Explained_Variance_Ratio": exp_var,
-        "Cumulative_Explained_Variance": cum_var
-    })
-    df_curve.to_csv(METRICS_DIR / "pca_full_curve.csv", index=False)
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        """Projects new sample vectors onto fitted principal component axes."""
+        if self.pca is None:
+            raise RuntimeError("PCA model has not been fitted yet.")
+        return self.pca.transform(X).astype(np.float32)
 
-    print("\nPCA Key Milestones:")
-    print(df_var.to_string(index=False))
+    def get_loadings(self, top_n_pcs: int = 5) -> pd.DataFrame:
+        """Returns component loadings (eigenvectors) for the top N principal components."""
+        if self.pca is None:
+            return pd.DataFrame()
+        n_pcs = min(top_n_pcs, self.pca.n_components_)
+        loadings = self.pca.components_[:n_pcs]
+        df_loadings = pd.DataFrame(
+            loadings,
+            index=[f"PC_{i+1}" for i in range(n_pcs)],
+            columns=[f"Feat_{j}" for j in range(loadings.shape[1])]
+        )
+        return df_loadings
 
-    return {
-        "n_90": n_90,
-        "n_95": n_95,
-        "feats_pca_90": feats_pca_90,
-        "feats_pca_95": feats_pca_95,
-        "feats_pca_2d": feats_pca_2d,
-        "pca_90": pca_90,
-        "pca_95": pca_95,
-        "pca_2d": pca_2d
-    }
+    def save(self, filepath: Path):
+        """Saves fitted PCA model."""
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(self.pca, filepath)
+
+    @classmethod
+    def load(cls, filepath: Path, random_state: int = RANDOM_SEED):
+        inst = cls(random_state=random_state)
+        if filepath.exists():
+            inst.pca = joblib.load(filepath)
+            inst.explained_variance_ratio_ = inst.pca.explained_variance_ratio_
+            inst.cumulative_variance_ = np.cumsum(inst.explained_variance_ratio_)
+            inst.n_components_ = inst.pca.n_components_
+        return inst
 
 
-def run_tsne_experiments(pca_reduced_features=None):
+class TSNEManager:
     """
-    Executes systematic t-SNE grid experiments across perplexity [5, 30, 50]
-    and learning rates [100, 200] on the PCA-95% reduced space.
+    Interactive t-SNE engine with dynamic parameter validation and execution tracking.
     """
-    print("=" * 65)
-    print("Executing Systematic t-SNE Hyperparameter Sweeps...")
 
-    if pca_reduced_features is None:
-        pca_reduced_features = np.load(EMBEDDINGS_DIR / "pca_95_features.npy")
+    def __init__(self, random_state: int = RANDOM_SEED):
+        self.random_state = random_state
 
-    results = []
-    total_runs = len(TSNE_PERPLEXITIES) * len(TSNE_LEARNING_RATES)
-    run_idx = 0
+    def validate_perplexity(self, n_samples: int, perplexity: float) -> float:
+        """Ensures perplexity adheres to mathematical constraints (p < N/3 and p >= 2)."""
+        if n_samples < 5:
+            raise ValueError(f"Too few samples for t-SNE ({n_samples} samples). Need at least 5.")
+        max_valid = max(float(n_samples - 1) / 3.0, 2.0)
+        safe_perp = min(max(float(perplexity), 2.0), max_valid)
+        return round(safe_perp, 1)
 
-    for perp in TSNE_PERPLEXITIES:
-        for lr in TSNE_LEARNING_RATES:
-            run_idx += 1
-            print(f"[{run_idx}/{total_runs}] Running t-SNE (Perplexity={perp}, Learning Rate={lr})...")
-            t0 = time.time()
+    def fit_transform(
+        self,
+        X: np.ndarray,
+        perplexity: float = 30.0,
+        learning_rate: float = 200.0,
+        max_iter: int = 1000,
+        metric: str = "euclidean"
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """
+        Executes real t-SNE projection onto 2D space.
+        """
+        n_samples = X.shape[0]
+        safe_perp = self.validate_perplexity(n_samples, perplexity)
 
-            tsne = TSNE(
-                n_components=2,
-                perplexity=perp,
-                learning_rate=lr,
-                max_iter=TSNE_ITERATIONS,
-                random_state=RANDOM_SEED,
-                init="pca",
-                n_jobs=-1
-            )
-            embedding_2d = tsne.fit_transform(pca_reduced_features).astype(np.float32)
-            elapsed = time.time() - t0
-            kl_div = getattr(tsne, "kl_divergence_", None)
+        # If dimensions > 50, apply preliminary PCA compression for speed and noise filtering
+        if X.shape[1] > 50:
+            pca_pre = PCA(n_components=min(50, n_samples - 1), random_state=self.random_state)
+            X_input = pca_pre.fit_transform(X)
+            init_strategy = "pca"
+        else:
+            X_input = X
+            init_strategy = "random"
 
-            emb_filename = f"tsne_perp{perp}_lr{lr}.npy"
-            np.save(EMBEDDINGS_DIR / emb_filename, embedding_2d)
+        t0 = time.time()
+        tsne = TSNE(
+            n_components=2,
+            perplexity=safe_perp,
+            learning_rate=max(float(learning_rate), 10.0),
+            max_iter=int(max_iter),
+            metric=metric,
+            random_state=self.random_state,
+            init=init_strategy
+        )
+        embedding_2d = tsne.fit_transform(X_input).astype(np.float32)
+        elapsed = time.time() - t0
 
-            results.append({
-                "Perplexity": perp,
-                "Learning_Rate": lr,
-                "KL_Divergence": round(float(kl_div), 4) if kl_div is not None else np.nan,
-                "Runtime_Seconds": round(elapsed, 2),
-                "Embedding_File": emb_filename
-            })
-            print(f"   -> Completed in {elapsed:.2f}s | KL Divergence: {kl_div:.4f}")
+        kl_div = getattr(tsne, "kl_divergence_", None)
 
-    df_tsne = pd.DataFrame(results)
-    df_tsne.to_csv(METRICS_DIR / "tsne_parameter_comparison.csv", index=False)
-    print("\nt-SNE Parameter Comparison Summary:")
-    print(df_tsne.to_string(index=False))
+        metadata = {
+            "perplexity_requested": perplexity,
+            "perplexity_used": safe_perp,
+            "learning_rate": learning_rate,
+            "max_iter": max_iter,
+            "metric": metric,
+            "runtime_seconds": round(elapsed, 2),
+            "kl_divergence": round(float(kl_div), 4) if kl_div is not None else "N/A"
+        }
 
-    return df_tsne
-
-
-def run_dimensionality_reduction_pipeline():
-    pca_results = run_pca_experiments()
-    tsne_results = run_tsne_experiments(pca_results["feats_pca_95"])
-    return pca_results, tsne_results
-
-
-if __name__ == "__main__":
-    run_dimensionality_reduction_pipeline()
+        return embedding_2d, metadata
