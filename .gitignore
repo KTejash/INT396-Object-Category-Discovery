@@ -1,0 +1,33 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Jupyter & IPython
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Data directories (Raw heavy images & temp downloads)
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Heavy feature embeddings and models
+outputs/models/*.joblib
+outputs/models/*.pt
+outputs/embeddings/*.npy
+outputs/embeddings/*.npz
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Streamlit local state
+.streamlit/

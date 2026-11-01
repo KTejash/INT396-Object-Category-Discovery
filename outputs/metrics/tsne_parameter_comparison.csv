@@ -1,0 +1,7 @@
+Perplexity,Learning_Rate,KL_Divergence,Runtime_Seconds,Embedding_File
+5,100,1.6752,5.52,tsne_perp5_lr100.npy
+5,200,1.6701,3.86,tsne_perp5_lr200.npy
+30,100,1.6004,7.79,tsne_perp30_lr100.npy
+30,200,1.5605,8.47,tsne_perp30_lr200.npy
+50,100,1.4851,11.56,tsne_perp50_lr100.npy
+50,200,1.4971,10.42,tsne_perp50_lr200.npy

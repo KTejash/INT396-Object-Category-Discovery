@@ -1,0 +1,5 @@
+Representation,Dimensions,Mean (Overall),Std (Overall),Min,Max
+CNN Features (Raw),2048,0.0609,0.2401,0.0,19.8816
+CNN Features (Standardized),2048,0.0,1.0,-1.6332,39.1297
+Color Histograms (Raw),512,0.001953,0.01355,0.0,0.8319
+Color Histograms (Standardized),512,-0.0,1.0,-1.0269,48.9795

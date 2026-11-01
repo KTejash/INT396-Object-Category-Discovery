@@ -1,0 +1,6 @@
+Metric,Value,Theoretical Range
+Adjusted Rand Index (ARI),0.4037,"[-1.0, +1.0] (0 = random chance)"
+Normalized Mutual Information (NMI),0.5868,"[0.0, 1.0] (0 = no shared info)"
+Cluster Count (k),8.0,Integer (2..12)
+Ground Truth Categories,8.0,8 Object Classes
+Sample Count Evaluated,2400.0,2400 images

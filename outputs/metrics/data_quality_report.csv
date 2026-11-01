@@ -1,0 +1,10 @@
+Metric,Value
+Total Images Collected,2400.0
+Missing Images,0.0
+Corrupt Images,0.0
+Duplicate Images,0.0
+Valid Images Retained,2400.0
+Retention Rate (%),100.0
+Mean Width (px),990.5
+Mean Height (px),774.3
+Median Aspect Ratio,1.33
