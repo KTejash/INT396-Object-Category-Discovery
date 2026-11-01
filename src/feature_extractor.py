@@ -83,6 +83,10 @@ class FeatureExtractor:
         self.weights = models.ResNet50_Weights.DEFAULT
         self.resnet_transform = self.weights.transforms()
 
+    def get_resnet50_model(self) -> nn.Module:
+        """Returns cached ResNet50 model instance."""
+        return get_resnet50_model(self.device)
+
     def extract_resnet50(
         self,
         image_paths: List[Path],
@@ -200,10 +204,13 @@ class FeatureExtractor:
         elif feature_type == "color_hist":
             feats = self.extract_color_histograms(abs_paths, bins_per_channel=bins_per_channel, progress_callback=progress_callback)
         elif feature_type == "combined":
+            cb_cnn = (lambda p, m: progress_callback(p * 0.5, m)) if progress_callback else None
+            cb_hist = (lambda p, m: progress_callback(0.5 + p * 0.5, m)) if progress_callback else None
+
             if progress_callback:
                 progress_callback(0.0, "Starting dual feature extraction...")
-            f_cnn = self.extract_resnet50(abs_paths, batch_size=batch_size, progress_callback=lambda p, m: progress_callback(p * 0.5, m))
-            f_hist = self.extract_color_histograms(abs_paths, bins_per_channel=bins_per_channel, progress_callback=lambda p, m: progress_callback(0.5 + p * 0.5, m))
+            f_cnn = self.extract_resnet50(abs_paths, batch_size=batch_size, progress_callback=cb_cnn)
+            f_hist = self.extract_color_histograms(abs_paths, bins_per_channel=bins_per_channel, progress_callback=cb_hist)
             feats = self.combine_features(f_cnn, f_hist, cnn_weight=cnn_weight, hist_weight=hist_weight)
         else:
             raise ValueError(f"Unknown feature_type: {feature_type}. Choose 'resnet50', 'color_hist', or 'combined'.")
