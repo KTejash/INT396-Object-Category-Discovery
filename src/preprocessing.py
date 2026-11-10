@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Tuple, Dict, Any, Optional
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, Normalizer
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, Normalizer, RobustScaler
 import joblib
 
 # Ensure project root is in sys.path
@@ -36,12 +36,14 @@ class PreprocessingPipeline:
             self.scaler = StandardScaler()
         elif self.scaler_type == "minmax":
             self.scaler = MinMaxScaler(feature_range=(0.0, 1.0))
+        elif self.scaler_type == "robust":
+            self.scaler = RobustScaler()
         elif self.scaler_type == "l2_norm":
             self.scaler = Normalizer(norm="l2")
         elif self.scaler_type == "none":
             self.scaler = None
         else:
-            raise ValueError(f"Unknown scaler_type: '{self.scaler_type}'. Choose 'standard', 'minmax', 'l2_norm', or 'none'.")
+            raise ValueError(f"Unknown scaler_type: '{self.scaler_type}'. Choose 'standard', 'minmax', 'robust', 'l2_norm', or 'none'.")
 
     def validate_features(self, X: np.ndarray) -> Dict[str, Any]:
         """
