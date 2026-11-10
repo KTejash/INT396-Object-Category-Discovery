@@ -340,3 +340,39 @@ class DatasetManager:
             df_gt.to_csv(self.ground_truth_path, index=False)
 
         return removed_count
+
+    def export_audit_report(self, output_path: Optional[Path] = None) -> Path:
+        """Exports full dataset audit statistics to JSON and Markdown summary."""
+        df_summary, df_valid, stats = self.audit_dataset()
+        if output_path is None:
+            output_path = self.metadata_dir / f"{self.dataset_name}_audit_report.json"
+
+        report_data = {
+            "dataset_name": self.dataset_name,
+            "summary_metrics": df_summary.to_dict(orient="records"),
+            "quality_stats": stats,
+            "valid_image_count": len(df_valid)
+        }
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        import json
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(report_data, f, indent=2)
+
+        return output_path
+
+    def package_dataset_as_zip(self, zip_destination: Path) -> Path:
+        """Packages the dataset images and manifest into a distributable ZIP archive."""
+        zip_destination.parent.mkdir(parents=True, exist_ok=True)
+        df_m = self.load_manifest()
+
+        with zipfile.ZipFile(zip_destination, "w", zipfile.ZIP_DEFLATED) as zf:
+            if self.manifest_path.exists():
+                zf.write(self.manifest_path, arcname="metadata/image_manifest.csv")
+            for _, row in df_m.iterrows():
+                abs_p = PROJECT_ROOT / str(row["file_path"])
+                if abs_p.exists():
+                    zf.write(abs_p, arcname=f"images/{abs_p.name}")
+
+        return zip_destination
+
