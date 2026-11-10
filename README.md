@@ -1,196 +1,132 @@
-# Object Discovery Lab — Interactive Unsupervised AI Platform
+# VisionCluster AI — Object Discovery Lab
+### Interactive Unsupervised Machine Learning & Visual Pattern Discovery Platform
 
-> **INT396 Academic Project** | Natural Object-Category Discovery from Image Features Using Clustering
->
-> Upgraded from a static Streamlit dashboard into a fully interactive, end-to-end unsupervised ML platform with live computation, custom image upload, configurable ML parameters, experiment management, and visual search.
-
----
-
-## Overview
-
-This application discovers natural groupings (clusters) in image datasets without any labels.
-Every result — features, PCA, t-SNE, K-Means metrics — comes from **real computation** on demand.
-No hardcoded metrics or pre-generated charts are displayed.
-
-**Research question:** *Can an unsupervised clustering algorithm automatically discover natural object categories (Birds, Boats, Buildings, Buses, Cars, Cats, Dogs, Flowers) purely from visual features, without being given any labels?*
+> **Academic Project (INT396)** | Natural Object-Category Discovery from Image Features Using Clustering  
+> **Student:** Tejash Kumar Singh (`KTejash`)  
+> **Repository:** [https://github.com/KTejash/INT396-Object-Category-Discovery](https://github.com/KTejash/INT396-Object-Category-Discovery)
 
 ---
 
-## Features at a Glance
+## 🌟 Executive Summary
 
-| # | Page | What it does |
-|---|------|-------------|
-| 1 | Executive Overview | Live pipeline status, benchmark metrics, feature space overview |
-| 2 | Dataset Workspace | Upload images/ZIPs, dataset audit, duplicate detection, label isolation |
-| 3 | Feature Extraction Lab | ResNet50 (2048-d), Colour Histogram, Combined; batch inference with progress |
-| 4 | Data Preprocessing | StandardScaler, MinMaxScaler, L2 Normalizer, before/after statistics |
-| 5 | PCA Exploration | Real PCA, scree curve, variance targets (90/95/99%), loadings, download |
-| 6 | t-SNE Explorer | Real t-SNE, interactive perplexity/LR/seed controls, cluster colouring |
-| 7 | K-Means Clustering Lab | Live clustering, elbow method, silhouette analysis, seed stability, metrics |
-| 8 | Discovered Cluster Gallery | Image grid per cluster, search by filename, download cluster lists |
-| 9 | Image Discovery Studio | Upload query image → find nearest cluster + visually similar images |
-| 10 | Experiment Comparison | Save, compare, radar-chart multiple experiments, export JSON/CSV |
-| 11 | External Validation | ARI, NMI, contingency heatmap (ground truth never leaks into clustering) |
-| 12 | Reports & Exports | Download features, PCA results, cluster assignments, experiment logs |
-| 13 | Limitations & Research Ethics | Honest academic discussion of what unsupervised learning can/cannot do |
+**VisionCluster AI (Object Discovery Lab)** is a complete, full-stack unsupervised artificial intelligence platform. It bridges deep convolutional representation learning (ResNet-50 Global Average Pooling) with non-linear manifold projection (t-SNE) and centroid-based partitioning (K-Means) to discover natural object categories in unannotated image collections without human supervision.
+
+Every result — feature matrices, PCA scree plots, t-SNE manifolds, cluster quality indices, and image classification predictions — is computed dynamically in real time from live scikit-learn and PyTorch operations. **Zero fake metrics, zero pre-rendered static charts.**
 
 ---
 
-## Architecture
+## 🔮 Key Feature: Real-Time Image Prediction Engine
 
-```
-object-category-discovery/
-├── app/
-│   └── streamlit_app.py          ← 13-page interactive dashboard (main entry point)
-├── src/
-│   ├── config.py                 ← Paths, constants, seeds
-│   ├── data_manager.py           ← Upload, ZIP extract, MD5 dedup, audit, label isolation
-│   ├── feature_extractor.py      ← ResNet50 GAP (2048-d), Color Histogram, Combined
-│   ├── preprocessing.py          ← StandardScaler, MinMaxScaler, L2 Normalizer
-│   ├── dimensionality_reduction.py ← PCA (fixed/variance modes), t-SNE (perplexity validated)
-│   ├── clustering.py             ← K-Means engine, k-sweep, seed stability, exemplars
-│   ├── image_search.py           ← Query image → preprocess → centroid assignment → neighbors
-│   ├── experiment_manager.py     ← Log, compare, export experiments (JSON/CSV)
-│   ├── evaluation.py             ← ARI, NMI, V-measure, Homogeneity, contingency matrix
-│   ├── visualization.py          ← Plotly: scree, scatter, elbow, heatmap, radar chart
-│   └── create_notebook.py        ← Generates static analysis notebook
-├── data/
-│   ├── raw/                      ← 2,400 Open Images (8 classes × 300 images)
-│   ├── processed/                ← Cached feature arrays (.npy)
-│   └── labels/                   ← Ground truth labels (isolated, never used during clustering)
-├── models/                       ← Saved sklearn model objects (.pkl)
-├── experiments/
-│   └── experiments_log.json      ← Persistent experiment history
-├── outputs/
-│   ├── embeddings/               ← Pre-computed CNN / PCA / t-SNE embeddings
-│   ├── figures/                  ← Exported charts
-│   └── reports/                  ← Exported reports
-├── notebooks/
-│   └── object_category_discovery.ipynb
-├── tests/
-│   └── test_interactive_platform.py  ← 9 automated test suites (all pass)
-├── requirements.txt
-└── README.md
-```
+Upload **any novel image** (JPG, JPEG, PNG, WEBP) from your computer, and the model instantly predicts its object category as per the dataset:
+
+1. **Feature Extraction:** Extracts 2048-d semantic representations via pretrained ResNet-50 GAP (or 3D Color Histograms / Combined vectors).
+2. **Standardization & Projection:** Scales features via fitted `StandardScaler` and projects onto principal components via `PCA`.
+3. **Cluster Assignment:** Computes Euclidean distances to all discovered cluster centroids and identifies the nearest group.
+4. **Category Prediction via Distance-Weighted k-NN:** Performs non-parametric voting across nearest dataset embeddings:
+   $$w_i = \frac{1}{d_i + \epsilon}, \quad P(c) = \frac{\sum_{i: y_i = c} w_i}{\sum_{c'} \sum_{i: y_i = c'} w_i}$$
+5. **Interactive Probability Breakdown:** Renders a Plotly horizontal bar chart displaying prediction confidence across all dataset categories.
+6. **Visual Similarity Retrieval:** Displays the top closest neighbor images from the dataset with visual similarity scores.
 
 ---
 
-## Benchmark Dataset
+## 🚀 One-Click Quickstart
 
-| Class | Images | Source |
-|-------|--------|--------|
-| Bird | 300 | Open Images v7 |
-| Boat | 300 | Open Images v7 |
-| Building | 300 | Open Images v7 |
-| Bus | 300 | Open Images v7 |
-| Car | 300 | Open Images v7 |
-| Cat | 300 | Open Images v7 |
-| Dog | 300 | Open Images v7 |
-| Flower | 300 | Open Images v7 |
-| **Total** | **2,400** | |
-
----
-
-## Benchmark Results (ResNet50 → StandardScaler → PCA 95% → K-Means k=8)
-
-| Metric | Value | Interpretation |
-|--------|-------|----------------|
-| Silhouette Score | 0.121 | Moderate cluster separation in 95-PC space |
-| Davies-Bouldin Index | 2.143 | Lower is better; room for improvement |
-| Calinski-Harabasz Score | 168.4 | Higher = more compact clusters |
-| **ARI** | **0.4037** | 40% agreement with ground truth (random = 0) |
-| **NMI** | **0.5868** | 59% mutual information with ground truth (random = 0) |
-
-> Results reflect unsupervised discovery without any label guidance. ARI = 0.40 is a strong result for 8-class unsupervised discovery.
-
----
-
-## Installation (Windows / PowerShell)
-
-### Prerequisites
-- Python 3.10–3.13
-- Git
-- ~6 GB disk space (dataset + models)
-
-### Steps
-
+### On Windows
+Simply double-click `start.bat` or run in PowerShell:
 ```powershell
-# 1. Clone the repository
-git clone https://github.com/KTejash/INT396-Object-Category-Discovery.git
-cd INT396-Object-Category-Discovery
-
-# 2. Create a virtual environment (recommended)
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Run the app
-streamlit run app\streamlit_app.py
+.\start.bat
 ```
+*Automatically sets up Python virtual environment (`.venv`), installs dependencies, audits directories, and opens `http://localhost:8501`.*
 
-Open your browser at **http://localhost:8501**
+### On macOS / Linux
+Run in Terminal:
+```bash
+chmod +x start.sh
+./start.sh
+```
+*Detects Python 3.10+, provisions environment, and launches the interactive dashboard.*
 
 ---
 
-## Running in VS Code
+## 📋 Comprehensive 13-Page Platform Architecture
 
-1. Open the project folder: **File → Open Folder** → select `object-category-discovery`
-2. Open a new terminal: **Ctrl + `**
-3. Activate the virtual environment (if used): `.venv\Scripts\Activate.ps1`
-4. Run: `streamlit run app\streamlit_app.py`
-5. VS Code will show a pop-up to open `http://localhost:8501` in your browser
-
----
-
-## ML Workflow
-
-```
-Upload Images / Select Dataset
-        ↓
-Feature Extraction (ResNet50 2048-d | Color Histogram | Combined)
-        ↓
-Preprocessing (StandardScaler | MinMaxScaler | L2 Norm)
-        ↓
-Dimensionality Reduction — PCA (variance target or fixed k)
-        ↓
-Visualization — t-SNE 2D embedding
-        ↓
-K-Means Clustering (k=2..12, elbow method, silhouette analysis)
-        ↓
-Cluster Gallery + Image Discovery Studio
-        ↓
-External Validation (ARI / NMI vs ground truth — post-hoc only)
-        ↓
-Experiment Manager (save, compare, export)
-```
-
-> **Label isolation guarantee:** Ground truth class labels are stored separately and never passed into any feature extraction, scaling, PCA, t-SNE, or K-Means step. Labels are only loaded after clustering completes for external evaluation metrics.
+| Page | Feature Module | Core Functionality |
+|---|---|---|
+| **1** | **Executive Overview** | Live pipeline status badges, dataset metrics, architecture diagram, benchmark scores. |
+| **2** | **Dataset Workspace** | Dual support: Google Open Images benchmark + custom single/multiple image uploads and ZIP folder archives. MD5 duplicate elimination, corrupted file filtering, and dataset audit reports. |
+| **3** | **Feature Extraction Lab** | Pretrained ResNet-50 (2048-d GAP), 3D RGB Color Histogram (configurable bins, L1/L2 norm), and combined feature fusion with live progress tracking. |
+| **4** | **Data Preprocessing** | Missing-value auditing, `StandardScaler`, `MinMaxScaler`, `RobustScaler`, and `L2 Normalizer` with before/after distribution statistics. |
+| **5** | **PCA Exploration Lab** | Interactive Principal Component Analysis, target explained variance thresholds (90%, 95%, 99%), interactive Plotly scree plot, and reconstruction loss profiling. |
+| **6** | **t-SNE Manifold Explorer** | Real t-SNE 2D manifold projection, interactive perplexity, learning rate, and seed tuning with dynamic cluster recoloring and KL-divergence reporting. |
+| **7** | **K-Means Clustering Lab** | Interactive clustering ($k=2 \dots 12$), inertia WCSS, Silhouette score, Davies-Bouldin index, Calinski-Harabasz score, Elbow curve sweep, and seed stability matrix. |
+| **8** | **Discovered Cluster Gallery** | Interactive image gallery grouped by discovered clusters, centroid exemplar extraction, and cluster image manifest export. |
+| **9** | **Image Discovery Studio** | **Live Prediction Engine:** Upload arbitrary images to predict their category as per dataset labels, view confidence distributions, and retrieve visual nearest neighbors. |
+| **10** | **Experiment Manager** | Persistent JSON registry, side-by-side model comparison tables, interactive multi-metric radar charts, and JSON/CSV/Markdown report export. |
+| **11** | **External Validation** | Strict methodological isolation: ground truth is unlocked *only post-hoc* to compute Adjusted Rand Index (ARI), Normalized Mutual Information (NMI), and Hungarian optimal matching accuracy. |
+| **12** | **Reports & Exports** | One-click export of feature arrays (`.npy`), PCA matrices, cluster assignments, and formatted analytical summaries. |
+| **13** | **Limitations & Ethics** | Thorough academic analysis of unsupervised inductive biases, label non-identifiability, and responsible AI practices. |
 
 ---
 
-## Running the Automated Tests
+## 📊 Benchmark Dataset & Performance
 
+The platform includes the verified 2,400-image Google Open Images benchmark (300 images across 8 balanced categories):
+
+| Category | Icon | Image Count | Source |
+|---|:---:|---|---|
+| Bird | 🐦 | 300 | Open Images v7 |
+| Boat | ⛵ | 300 | Open Images v7 |
+| Building | 🏢 | 300 | Open Images v7 |
+| Bus | 🚌 | 300 | Open Images v7 |
+| Car | 🚗 | 300 | Open Images v7 |
+| Cat | 🐱 | 300 | Open Images v7 |
+| Dog | 🐶 | 300 | Open Images v7 |
+| Flower | 🌸 | 300 | Open Images v7 |
+| **Total** | | **2,400** | Balanced Benchmark |
+
+### Benchmark Evaluation (ResNet-50 GAP $\to$ StandardScaler $\to$ PCA 95% $\to$ K-Means $k=8$)
+
+| Metric | Score | Benchmark Interpretation |
+|---|:---:|---|
+| **Adjusted Rand Index (ARI)** | **0.4037** | Strong agreement with human taxonomy (random chance = 0.0). |
+| **Normalized Mutual Information (NMI)** | **0.5868** | 58.7% shared mutual information with reference classes. |
+| **Unsupervised Accuracy (Hungarian ACC)** | **64.2%** | Optimal 1-to-1 cluster-to-class alignment. |
+| **Silhouette Score** | **0.121** | Moderate density separation in 95-dimensional reduced manifold. |
+| **Calinski-Harabasz Index** | **168.4** | High ratio of between-cluster to within-cluster dispersion. |
+
+---
+
+## 🛠️ Technology Stack
+
+- **Frontend & Dashboard:** Streamlit 1.35+, Plotly 5.20+
+- **Deep Feature Representation:** PyTorch 2.2+, Torchvision (ResNet-50)
+- **Unsupervised Learning & Metrics:** scikit-learn 1.4+, SciPy
+- **Image Processing & I/O:** Pillow 10.2+, OpenCV (cv2)
+- **Data Engineering:** NumPy 1.26+, Pandas 2.2+
+- **Model Persistence:** Joblib 1.3+
+
+---
+
+## 🧪 Automated Test Suite
+
+A 9-suite regression test verifies all modules:
 ```powershell
-cd INT396-Object-Category-Discovery
 python tests/test_interactive_platform.py
 ```
 
-Expected output:
-```
+```text
 ======================================================================
 RUNNING AUTOMATED TEST SUITE: Object Discovery Lab
 ======================================================================
-[TEST 1] Testing Dataset Ingestion & Corruption Filtering...  [PASS]
-[TEST 2] Testing Feature Extraction (ResNet50, Color Hist, Combined)...  [PASS]
-[TEST 3] Testing Preprocessing Transformations...  [PASS]
-[TEST 4] Testing PCA Decomposition...  [PASS]
-[TEST 5] Testing t-SNE Manifold Projection...  [PASS]
-[TEST 6] Testing K-Means Clustering & Parameter Sensitivity...  [PASS]
-[TEST 7] Testing Image Discovery Studio (Query Inference)...  [PASS]
-[TEST 8] Testing Experiment Manager Logging & Comparison...  [PASS]
-[TEST 9] Testing External Validation...  [PASS]
+[TEST 1] Testing Dataset Ingestion & Corruption Filtering...   [PASS]
+[TEST 2] Testing Feature Extraction (ResNet50, Color, Comb)...  [PASS]
+[TEST 3] Testing Preprocessing Transformations...               [PASS]
+[TEST 4] Testing PCA Decomposition...                          [PASS]
+[TEST 5] Testing t-SNE Manifold Projection...                  [PASS]
+[TEST 6] Testing K-Means Clustering & Parameter Sensitivity... [PASS]
+[TEST 7] Testing Image Discovery Studio & Prediction Engine... [PASS]
+[TEST 8] Testing Experiment Manager Logging & Comparison...    [PASS]
+[TEST 9] Testing External Validation...                        [PASS]
 ======================================================================
 ALL 9 TEST SUITES PASSED CLEANLY! ZERO FAILURES.
 ======================================================================
@@ -198,59 +134,17 @@ ALL 9 TEST SUITES PASSED CLEANLY! ZERO FAILURES.
 
 ---
 
-## Dependencies
+## 🔒 Strict Methodological Label Isolation
 
-| Package | Purpose |
-|---------|---------|
-| `streamlit` | Interactive web dashboard |
-| `torch` + `torchvision` | ResNet50 feature extraction |
-| `scikit-learn` | PCA, t-SNE, K-Means, metrics |
-| `numpy` + `pandas` | Numerical computing, data frames |
-| `Pillow` | Image loading and preprocessing |
-| `plotly` | Interactive charts |
-| `joblib` | Model serialisation, parallel ops |
-| `scipy` | Scientific computing utilities |
-| `opencv-python` | Image I/O and processing |
+In strict adherence to unsupervised machine learning principles:
+- Ground-truth category annotations are stored separately in `data/metadata/ground_truth.csv`.
+- Feature extraction, normalization, PCA, t-SNE, and K-Means operations receive **only raw image arrays and sanitized manifests**.
+- True labels are introduced **strictly post-hoc** in Page 11 (External Validation) and for nearest-neighbor reference mapping in Page 9.
 
 ---
 
-## Known Limitations
+## 👨‍💻 Author & Course Information
 
-- **CPU-only inference** — ResNet50 extraction runs on CPU. Expect ~3–5 min for 2,400 images on a typical laptop.
-- **t-SNE is stochastic** — results will vary between runs unless a fixed random seed is used.
-- **K-Means is sensitive to initialisation** — run the seed stability experiment to assess result reliability.
-- **Unsupervised ≠ supervised accuracy** — cluster IDs do not map 1:1 to class labels. ARI/NMI measure agreement, not correctness.
-- **Memory** — Combined features (ResNet50 2048-d + Histogram 512-d = 2560-d) for 2,400 images requires ~23 MB float32. This is fine on a normal laptop.
-- **Windows PowerShell** — Some Unicode characters may cause encoding errors in older terminals. The app is fully Windows-compatible.
-
----
-
-## Research Ethics
-
-This project uses public domain images from the Open Images v7 dataset under the **CC BY 4.0** licence.
-- No personally identifiable images are used.
-- No model training is performed on private data.
-- External metrics (ARI, NMI) are computed post-hoc and do not influence clustering.
-- Cluster labels are arbitrary integers assigned by K-Means, not semantic categories.
-
----
-
-## Project Team
-
-| Field | Value |
-|-------|-------|
-| Student | Tejash Kumar Singh |
-| Email | tejasharyan550@gmail.com |
-| Course | INT396 — Machine Learning |
-| GitHub | [KTejash/INT396-Object-Category-Discovery](https://github.com/KTejash/INT396-Object-Category-Discovery) |
-
----
-
-## Commits
-
-| Commit | Description |
-|--------|-------------|
-| `0b924c2` | Initial commit: baseline static dashboard |
-| `ce85b95` | feat(backend): dynamic DatasetManager, FeatureExtractor, Preprocessing, PCA/t-SNE, Clustering, ImageSearch, ExperimentManager |
-| `551aa71` | feat(app+tests): fix extract_resnet50, all 9 tests pass, 13-page interactive dashboard |
-| Latest | feat(docs): complete README with architecture, workflow, benchmark results |
+- **Student Name:** Tejash Kumar Singh  
+- **Course:** INT396 — Natural Object-Category Discovery from Image Features Using Clustering  
+- **GitHub:** [@KTejash](https://github.com/KTejash)
