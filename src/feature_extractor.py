@@ -216,3 +216,34 @@ class FeatureExtractor:
             raise ValueError(f"Unknown feature_type: {feature_type}. Choose 'resnet50', 'color_hist', or 'combined'.")
 
         return feats, image_ids
+
+    @staticmethod
+    def compute_feature_statistics(feats: np.ndarray) -> Dict[str, Any]:
+        """Calculates global statistical metrics of the extracted feature matrix."""
+        l2_norms = np.linalg.norm(feats, axis=1)
+        zero_pct = float(np.mean(feats == 0) * 100)
+        return {
+            "n_samples": int(feats.shape[0]),
+            "n_features": int(feats.shape[1]),
+            "mean_val": round(float(np.mean(feats)), 5),
+            "std_val": round(float(np.std(feats)), 5),
+            "min_val": round(float(np.min(feats)), 5),
+            "max_val": round(float(np.max(feats)), 5),
+            "sparsity_pct": round(zero_pct, 2),
+            "mean_l2_norm": round(float(np.mean(l2_norms)), 4),
+            "min_l2_norm": round(float(np.min(l2_norms)), 4),
+            "max_l2_norm": round(float(np.max(l2_norms)), 4),
+        }
+
+    @staticmethod
+    def save_features_to_cache(feats: np.ndarray, image_ids: np.ndarray, cache_file: Path):
+        """Saves feature matrix and corresponding image IDs to compressed NumPy archive."""
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(cache_file, features=feats, image_ids=image_ids)
+
+    @staticmethod
+    def load_features_from_cache(cache_file: Path) -> Tuple[np.ndarray, np.ndarray]:
+        """Loads cached feature matrix and image IDs."""
+        data = np.load(cache_file, allow_pickle=True)
+        return data["features"], data["image_ids"]
+
