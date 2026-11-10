@@ -18,6 +18,7 @@ from sklearn.metrics import (
     v_measure_score
 )
 from sklearn.metrics.cluster import contingency_matrix
+from scipy.optimize import linear_sum_assignment
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -112,3 +113,20 @@ class ExternalValidator:
             "contingency_matrix": df_cont,
             "contingency_matrix_normalized": df_cont_norm
         }
+
+    @staticmethod
+    def compute_clustering_accuracy(
+        true_labels: np.ndarray,
+        cluster_labels: np.ndarray
+    ) -> float:
+        """
+        Computes unsupervised clustering accuracy (ACC) via Hungarian optimal bipartite matching.
+        ACC = max_m sum_i 1(y_i == m(c_i)) / N
+        """
+        cont_mat = contingency_matrix(true_labels, cluster_labels)
+        # linear_sum_assignment solves minimum weight matching, so invert matrix
+        row_ind, col_ind = linear_sum_assignment(-cont_mat)
+        optimal_matches = cont_mat[row_ind, col_ind].sum()
+        total_samples = len(true_labels)
+        return round(float(optimal_matches / max(total_samples, 1)), 4)
+
