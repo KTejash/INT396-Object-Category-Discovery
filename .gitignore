@@ -15,19 +15,30 @@ venv/
 # Data directories (Raw heavy images & temp downloads)
 data/raw/*
 !data/raw/.gitkeep
+!data/raw/open_images/
+!data/raw/open_images/.gitkeep
+
+data/custom_uploads/*
+!data/custom_uploads/.gitkeep
+
 data/processed/*
 !data/processed/.gitkeep
 
-# Heavy feature embeddings and models
+# Output caches & models
+outputs/cache/*
+!outputs/cache/.gitkeep
+!outputs/cache/features/.gitkeep
 outputs/models/*.joblib
 outputs/models/*.pt
 outputs/embeddings/*.npy
 outputs/embeddings/*.npz
 
-# OS files
+# OS & IDE files
 .DS_Store
 Thumbs.db
 desktop.ini
+.vscode/
+.idea/
 
 # Streamlit local state
 .streamlit/
