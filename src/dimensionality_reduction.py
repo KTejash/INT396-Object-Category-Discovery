@@ -113,6 +113,21 @@ class PCAManager:
         )
         return df_loadings
 
+    def compute_reconstruction_error(self, X_original: np.ndarray, X_pca: np.ndarray) -> Dict[str, float]:
+        """Calculates reconstruction loss between original features and inverse-projected representation."""
+        if self.pca is None:
+            raise RuntimeError("PCA model has not been fitted yet.")
+        X_reconstructed = self.pca.inverse_transform(X_pca)
+        mse = float(np.mean((X_original - X_reconstructed) ** 2))
+        orig_norm = float(np.mean(X_original ** 2))
+        relative_error = float(mse / max(orig_norm, 1e-9))
+        return {
+            "reconstruction_mse": round(mse, 6),
+            "relative_reconstruction_error": round(relative_error, 6),
+            "information_retained_pct": round((1.0 - min(relative_error, 1.0)) * 100, 2)
+        }
+
+
     def save(self, filepath: Path):
         """Saves fitted PCA model."""
         filepath.parent.mkdir(parents=True, exist_ok=True)
