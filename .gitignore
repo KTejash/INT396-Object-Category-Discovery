@@ -42,3 +42,7 @@ desktop.ini
 
 # Streamlit local state
 .streamlit/
+
+# Large Archives & Custom Data
+*.zip
+data/custom/

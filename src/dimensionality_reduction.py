@@ -153,11 +153,11 @@ class TSNEManager:
         self.random_state = random_state
 
     def validate_perplexity(self, n_samples: int, perplexity: float) -> float:
-        """Ensures perplexity adheres to mathematical constraints (p < N/3 and p >= 2)."""
-        if n_samples < 5:
-            raise ValueError(f"Too few samples for t-SNE ({n_samples} samples). Need at least 5.")
-        max_valid = max(float(n_samples - 1) / 3.0, 2.0)
-        safe_perp = min(max(float(perplexity), 2.0), max_valid)
+        """Ensures perplexity adheres to mathematical constraints (p < N and p >= 1)."""
+        if n_samples < 3:
+            raise ValueError(f"Too few samples for t-SNE ({n_samples} samples). Need at least 3 samples.")
+        max_valid = max(float(n_samples - 1) / 2.0, 1.0)
+        safe_perp = min(max(float(perplexity), 1.0), max_valid)
         return round(safe_perp, 1)
 
     def fit_transform(
@@ -174,9 +174,10 @@ class TSNEManager:
         n_samples = X.shape[0]
         safe_perp = self.validate_perplexity(n_samples, perplexity)
 
-        # If dimensions > 50, apply preliminary PCA compression for speed and noise filtering
-        if X.shape[1] > 50:
-            pca_pre = PCA(n_components=min(50, n_samples - 1), random_state=self.random_state)
+        # If dimensions > 50 and enough samples exist, apply preliminary PCA compression
+        n_pca = min(50, n_samples - 1)
+        if X.shape[1] > 50 and n_pca >= 2:
+            pca_pre = PCA(n_components=n_pca, random_state=self.random_state)
             X_input = pca_pre.fit_transform(X)
             init_strategy = "pca"
         else:

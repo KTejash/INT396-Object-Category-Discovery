@@ -613,24 +613,45 @@ elif selected_page == "6. t-SNE Explorer":
     if X_in is None:
         st.warning("Please extract features and apply PCA first.")
     else:
+        n_pts = X_in.shape[0]
+        if n_pts < 5:
+            st.warning(
+                f"⚠️ **Small Sample Size Warning:** Active dataset has only **{n_pts}** samples. "
+                "t-SNE constructs probabilistic local neighborhoods and typically thrives on larger datasets. "
+                "Perplexity will be automatically adapted. For rich cluster visualization, switch to the "
+                "**Open Images Benchmark** (3,505 images) in Step 2."
+            )
+
         col_t1, col_t2 = st.columns([1, 1])
 
         with col_t1:
             st.subheader("t-SNE Hyperparameter Configuration")
-            perp_val = st.slider("Perplexity (Effective Neighborhood Size):", min_value=5.0, max_value=80.0, value=30.0, step=5.0)
+            max_p_allowed = max(1.0, float(n_pts - 1) / 2.0)
+            default_p = min(30.0, max(1.0, max_p_allowed))
+            step_p = 1.0 if max_p_allowed < 10.0 else 5.0
+            perp_val = st.slider(
+                "Perplexity (Effective Neighborhood Size):",
+                min_value=1.0,
+                max_value=max(2.0, min(80.0, float(n_pts - 1))),
+                value=float(default_p),
+                step=float(step_p)
+            )
             lr_val = st.slider("Learning Rate:", min_value=50.0, max_value=500.0, value=200.0, step=25.0)
             iter_val = st.select_slider("Iterations:", options=[250, 500, 750, 1000, 1500], value=1000)
             metric_choice = st.selectbox("Distance Metric:", ["euclidean", "cosine"])
 
             if st.button("Compute 2D t-SNE Embedding"):
                 with st.spinner("Optimizing non-linear manifold..."):
-                    tsne_mgr = TSNEManager(random_state=RANDOM_SEED)
-                    coords_2d, meta = tsne_mgr.fit_transform(
-                        X_in, perplexity=perp_val, learning_rate=lr_val, max_iter=iter_val, metric=metric_choice
-                    )
-                st.session_state.tsne_coords = coords_2d
-                st.session_state.tsne_metadata = meta
-                st.success(f"t-SNE converged in {meta['runtime_seconds']}s (KL Divergence: {meta['kl_divergence']})!")
+                    try:
+                        tsne_mgr = TSNEManager(random_state=RANDOM_SEED)
+                        coords_2d, meta = tsne_mgr.fit_transform(
+                            X_in, perplexity=perp_val, learning_rate=lr_val, max_iter=iter_val, metric=metric_choice
+                        )
+                        st.session_state.tsne_coords = coords_2d
+                        st.session_state.tsne_metadata = meta
+                        st.success(f"t-SNE converged in {meta['runtime_seconds']}s (KL Divergence: {meta['kl_divergence']})!")
+                    except Exception as err:
+                        st.error(f"t-SNE optimization error: {err}")
 
         with col_t2:
             st.subheader("Convergence & Runtime Telemetry")

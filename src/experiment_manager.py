@@ -97,22 +97,23 @@ class ExperimentManager:
             m = exp.get("metrics", {})
             km = exp.get("kmeans_config", {})
             rows.append({
-                "Experiment ID": exp.get("experiment_id"),
-                "Name": exp.get("experiment_name"),
-                "Timestamp": exp.get("timestamp"),
-                "Dataset": exp.get("dataset_name"),
-                "Samples": exp.get("sample_count"),
-                "Features": exp.get("feature_type"),
-                "Scaler": exp.get("scaler_type"),
-                "k (Clusters)": km.get("k", "N/A"),
-                "Silhouette": m.get("silhouette_score", "N/A"),
-                "Davies-Bouldin": m.get("davies_bouldin_index", "N/A"),
-                "Calinski-Harabasz": m.get("calinski_harabasz_score", "N/A"),
-                "ARI": m.get("ari", "N/A"),
-                "NMI": m.get("nmi", "N/A")
+                "Experiment ID": str(exp.get("experiment_id", "")),
+                "Name": str(exp.get("experiment_name", "")),
+                "Timestamp": str(exp.get("timestamp", "")),
+                "Dataset": str(exp.get("dataset_name", "")),
+                "Samples": str(exp.get("sample_count", "")),
+                "Features": str(exp.get("feature_type", "")),
+                "Scaler": str(exp.get("scaler_type", "")),
+                "k (Clusters)": str(km.get("k", "N/A")),
+                "Silhouette": f"{float(m.get('silhouette_score', 0)):.4f}" if m.get("silhouette_score") not in [None, "N/A"] else "N/A",
+                "Davies-Bouldin": f"{float(m.get('davies_bouldin_index', 0)):.4f}" if m.get("davies_bouldin_index") not in [None, "N/A"] else "N/A",
+                "Calinski-Harabasz": f"{float(m.get('calinski_harabasz_score', 0)):.2f}" if m.get("calinski_harabasz_score") not in [None, "N/A"] else "N/A",
+                "ARI": f"{float(m.get('ari', 0)):.4f}" if m.get("ari") not in [None, "N/A"] else "N/A",
+                "NMI": f"{float(m.get('nmi', 0)):.4f}" if m.get("nmi") not in [None, "N/A"] else "N/A"
             })
 
-        return pd.DataFrame(rows)
+        df = pd.DataFrame(rows)
+        return df.astype(str)
 
     def get_experiment(self, exp_id: str) -> Optional[Dict[str, Any]]:
         """Retrieves complete metadata for an experiment."""
@@ -148,22 +149,23 @@ class ExperimentManager:
             pca = exp.get("pca_config", {})
             
             records[name] = {
-                "Dataset": exp.get("dataset_name"),
-                "Sample Count": exp.get("sample_count"),
-                "Feature Extraction": exp.get("feature_type"),
-                "Scaling Method": exp.get("scaler_type"),
-                "PCA Mode": pca.get("mode", "None"),
-                "PCA Components": pca.get("components", "None"),
-                "Cluster Count (k)": km.get("k", "N/A"),
-                "Inertia (WCSS)": m.get("inertia_wcss", "N/A"),
-                "Silhouette Score": m.get("silhouette_score", "N/A"),
-                "Davies-Bouldin Index": m.get("davies_bouldin_index", "N/A"),
-                "Calinski-Harabasz": m.get("calinski_harabasz_score", "N/A"),
-                "Adjusted Rand Index (ARI)": m.get("ari", "N/A"),
-                "Normalized Mutual Info (NMI)": m.get("nmi", "N/A")
+                "Dataset": str(exp.get("dataset_name", "")),
+                "Sample Count": str(exp.get("sample_count", "")),
+                "Feature Extraction": str(exp.get("feature_type", "")),
+                "Scaling Method": str(exp.get("scaler_type", "")),
+                "PCA Mode": str(pca.get("mode", "None")),
+                "PCA Components": str(pca.get("components", "None")),
+                "Cluster Count (k)": str(km.get("k", "N/A")),
+                "Inertia (WCSS)": f"{float(m.get('inertia_wcss', 0)):.2f}" if m.get("inertia_wcss") not in [None, "N/A"] else "N/A",
+                "Silhouette Score": f"{float(m.get('silhouette_score', 0)):.4f}" if m.get("silhouette_score") not in [None, "N/A"] else "N/A",
+                "Davies-Bouldin Index": f"{float(m.get('davies_bouldin_index', 0)):.4f}" if m.get("davies_bouldin_index") not in [None, "N/A"] else "N/A",
+                "Calinski-Harabasz": f"{float(m.get('calinski_harabasz_score', 0)):.2f}" if m.get("calinski_harabasz_score") not in [None, "N/A"] else "N/A",
+                "Adjusted Rand Index (ARI)": f"{float(m.get('ari', 0)):.4f}" if m.get("ari") not in [None, "N/A"] else "N/A",
+                "Normalized Mutual Info (NMI)": f"{float(m.get('nmi', 0)):.4f}" if m.get("nmi") not in [None, "N/A"] else "N/A"
             }
 
-        return pd.DataFrame(records)
+        df = pd.DataFrame(records)
+        return df.astype(str)
 
     def export_all_json(self) -> str:
         """Exports entire experiment catalog as JSON string."""
