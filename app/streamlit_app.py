@@ -183,6 +183,19 @@ st.sidebar.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+st.sidebar.markdown("""
+<div style="font-size: 0.75rem; background: #101c3d; padding: 10px 12px; border-radius: 8px;
+            border: 1px solid #1c2e59; margin-bottom: 8px;">
+    <span style="color: #48cae4; font-weight: bold;">&#128101; INT396 Team</span><br>
+    <span style="color: #e0e6ed;">Tejash Kumar Singh</span>
+    <a href="https://github.com/KTejash" target="_blank"
+       style="color: #90e0ef; text-decoration: none; margin-left: 4px;">@KTejash</a><br>
+    <span style="color: #e0e6ed;">G. PurnaChandra Santosh</span>
+    <a href="https://github.com/GPCSantosh" target="_blank"
+       style="color: #90e0ef; text-decoration: none; margin-left: 4px;">@GPCSantosh</a>
+</div>
+""", unsafe_allow_html=True)
+
 nav_sections = [
     "1. Executive Overview",
     "2. Dataset Workspace",
@@ -267,6 +280,38 @@ if selected_page == "1. Executive Overview":
     """)
 
     st.info("Tip: Use the left navigation console to upload new image collections, tune hyperparameters, or test the Image Discovery Studio.")
+
+    st.markdown("---")
+    st.markdown("### 👥 Project Team — INT396")
+    tc1, tc2 = st.columns(2)
+    with tc1:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #1c2541 0%, #17223b 100%);
+                    border: 1px solid #293b66; border-radius: 12px; padding: 20px; text-align: center;">
+            <div style="font-size: 2.2rem;">👨‍💻</div>
+            <div style="font-size: 1.1rem; font-weight: 700; color: #ffffff; margin-top: 8px;">
+                Tejash Kumar Singh
+            </div>
+            <a href="https://github.com/KTejash" target="_blank"
+               style="color: #48cae4; text-decoration: none; font-size: 0.9rem;">
+                @KTejash
+            </a>
+        </div>
+        """, unsafe_allow_html=True)
+    with tc2:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #1c2541 0%, #17223b 100%);
+                    border: 1px solid #293b66; border-radius: 12px; padding: 20px; text-align: center;">
+            <div style="font-size: 2.2rem;">👨‍💻</div>
+            <div style="font-size: 1.1rem; font-weight: 700; color: #ffffff; margin-top: 8px;">
+                Gundumalla PurnaChandra Santosh
+            </div>
+            <a href="https://github.com/GPCSantosh" target="_blank"
+               style="color: #48cae4; text-decoration: none; font-size: 0.9rem;">
+                @GPCSantosh
+            </a>
+        </div>
+        """, unsafe_allow_html=True)
 
 
 # ==============================================================================

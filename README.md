@@ -2,7 +2,8 @@
 ### Interactive Unsupervised Machine Learning & Visual Pattern Discovery Platform
 
 > **Academic Project (INT396)** | Natural Object-Category Discovery from Image Features Using Clustering  
-> **Student:** Tejash Kumar Singh (`KTejash`)  
+> **Team Member 1:** Tejash Kumar Singh — [@KTejash](https://github.com/KTejash)  
+> **Team Member 2:** Gundumalla PurnaChandra Santosh — [@GPCSantosh](https://github.com/GPCSantosh)  
 > **Repository:** [https://github.com/KTejash/INT396-Object-Category-Discovery](https://github.com/KTejash/INT396-Object-Category-Discovery)
 
 ---
@@ -143,8 +144,12 @@ In strict adherence to unsupervised machine learning principles:
 
 ---
 
-## 👨‍💻 Author & Course Information
+## 👨‍💻 Team & Course Information
 
-- **Student Name:** Tejash Kumar Singh  
+| Role | Name | GitHub |
+|------|------|--------|
+| Team Member | Tejash Kumar Singh | [@KTejash](https://github.com/KTejash) |
+| Team Member | Gundumalla PurnaChandra Santosh | [@GPCSantosh](https://github.com/GPCSantosh) |
+
 - **Course:** INT396 — Natural Object-Category Discovery from Image Features Using Clustering  
-- **GitHub:** [@KTejash](https://github.com/KTejash)
+- **Project:** VisionCluster AI — Interactive Unsupervised Object Discovery Platform
