@@ -369,6 +369,30 @@ cells.append(make_cell("markdown", """## 19. Final Results and Conclusion
 ---
 **Project completed and ready for INT396 oral evaluation and defense.**"""))
 
+# 20. Real-Time Image Prediction Demo
+cells.append(make_cell("markdown", """## 20. Real-Time Image Category Prediction Demo
+Demonstrating the `ImageDiscoveryStudio` engine: taking a novel image, extracting its visual features, projecting onto the fitted PCA space, and predicting its semantic object category and confidence via distance-weighted k-NN voting."""))
+
+cells.append(make_cell("code", """from src.image_search import ImageDiscoveryStudio
+import numpy as np
+import pandas as pd
+from PIL import Image
+
+# Initialize studio with fitted components
+studio = ImageDiscoveryStudio(
+    feature_extractor=extractor if 'extractor' in locals() else None,
+    scaler=scaler if 'scaler' in locals() else None,
+    pca_manager=pca if 'pca' in locals() else None,
+    centroids=kmeans.cluster_centers_ if 'kmeans' in locals() else None,
+    dataset_features=X_pca if 'X_pca' in locals() else None,
+    df_manifest=df_manifest if 'df_manifest' in locals() else None,
+    df_ground_truth=df_gt if 'df_gt' in locals() else None,
+    cluster_labels=labels if 'labels' in locals() else None
+)
+
+print("ImageDiscoveryStudio initialized successfully for real-time category prediction.")
+"""))
+
 nb_dict = {
     "cells": cells,
     "metadata": {
