@@ -207,3 +207,53 @@ def plot_experiment_comparison_radar(df_compare: pd.DataFrame) -> go.Figure:
         **DARK_LAYOUT
     )
     return fig
+
+
+def plot_prediction_confidence_bar(df_probs: pd.DataFrame, predicted_class: str) -> go.Figure:
+    """Builds interactive horizontal bar chart showing category prediction confidence scores."""
+    if df_probs.empty:
+        fig = go.Figure()
+        fig.update_layout(title="No Class Probability Data Available", **DARK_LAYOUT)
+        return fig
+
+    df_sorted = df_probs.sort_values(by="Confidence_Pct", ascending=True)
+
+    colors = [
+        "#00f5d4" if str(cat) == str(predicted_class) else "#3a86ff"
+        for cat in df_sorted["Category"]
+    ]
+
+    fig = go.Figure(go.Bar(
+        x=df_sorted["Confidence_Pct"],
+        y=df_sorted["Category"],
+        orientation="h",
+        marker=dict(color=colors, line=dict(color="#ffffff", width=1)),
+        text=[f"{v:.1f}%" for v in df_sorted["Confidence_Pct"]],
+        textposition="outside"
+    ))
+
+    fig.update_layout(
+        title=f"Predicted Category Confidence Distribution (Top: {predicted_class})",
+        xaxis=dict(title="Confidence (%)", range=[0, max(100, float(df_sorted['Confidence_Pct'].max()) + 15)]),
+        yaxis=dict(title="Dataset Category"),
+        **DARK_LAYOUT
+    )
+    return fig
+
+
+def plot_cluster_purity_breakdown(df_purity: pd.DataFrame) -> go.Figure:
+    """Builds interactive bar chart of cluster purity and dominant categories."""
+    fig = px.bar(
+        df_purity,
+        x=[f"Cluster {c}" for c in df_purity["Cluster_ID"]],
+        y="Purity_Pct",
+        color="Dominant_Category",
+        text="Dominant_Category",
+        title="Discovered Cluster Purity & Dominant Dataset Category",
+        labels={"x": "Cluster ID", "y": "Cluster Purity (%)"},
+        color_discrete_sequence=px.colors.qualitative.Bold
+    )
+    fig.update_traces(textposition="inside")
+    fig.update_layout(**DARK_LAYOUT)
+    return fig
+
