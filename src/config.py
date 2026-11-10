@@ -46,6 +46,24 @@ TARGET_CLASSES = {
 
 CATEGORY_NAMES = sorted(list(TARGET_CLASSES.values()))
 
+CATEGORY_EMOJIS = {
+    "Bird": "🐦",
+    "Boat": "⛵",
+    "Building": "🏢",
+    "Bus": "🚌",
+    "Car": "🚗",
+    "Cat": "🐱",
+    "Dog": "🐶",
+    "Flower": "🌸"
+}
+
+
+def get_category_display(name: str) -> str:
+    """Returns category name with descriptive emoji if available."""
+    emoji = CATEGORY_EMOJIS.get(name, "🏷️")
+    return f"{emoji} {name}"
+
+
 # Sampling Configuration
 # Bus has ~355 images across validation and test splits.
 # Setting TARGET_PER_CLASS to 300 gives 2,400 balanced images (or 320 for 2,560 images).
