@@ -252,6 +252,53 @@ class ClusteringEngine:
 
         return pd.DataFrame(exemplar_records)
 
+    def compute_cluster_majority_mapping(
+        self,
+        df_manifest: pd.DataFrame,
+        df_ground_truth: pd.DataFrame
+    ) -> pd.DataFrame:
+        """
+        Maps each cluster to its dominant dataset ground-truth category,
+        calculates cluster purity and class distribution.
+        """
+        if self.labels_ is None:
+            raise RuntimeError("Must fit K-Means model before computing cluster mapping.")
+
+        id_to_label = dict(zip(df_ground_truth["image_id"].astype(str), df_ground_truth["category"].astype(str)))
+        manifest_ids = df_manifest["image_id"].astype(str).values
+
+        unique_clusters = np.unique(self.labels_)
+        records = []
+
+        for c_id in unique_clusters:
+            mask = (self.labels_ == c_id)
+            c_ids = [manifest_ids[i] for i, m in enumerate(mask) if m and i < len(manifest_ids)]
+            labels_in_cluster = [id_to_label[img_id] for img_id in c_ids if img_id in id_to_label]
+
+            if labels_in_cluster:
+                s = pd.Series(labels_in_cluster)
+                dominant = s.value_counts().index[0]
+                dominant_count = int(s.value_counts().iloc[0])
+                total = len(labels_in_cluster)
+                purity = dominant_count / total
+                records.append({
+                    "Cluster_ID": int(c_id),
+                    "Dominant_Category": dominant,
+                    "Purity_Pct": round(purity * 100, 2),
+                    "Dominant_Count": dominant_count,
+                    "Total_Images": total
+                })
+            else:
+                records.append({
+                    "Cluster_ID": int(c_id),
+                    "Dominant_Category": f"Cluster {c_id}",
+                    "Purity_Pct": 100.0,
+                    "Dominant_Count": int(np.sum(mask)),
+                    "Total_Images": int(np.sum(mask))
+                })
+
+        return pd.DataFrame(records)
+
     def save(self, model_path: Path):
         """Saves fitted KMeans model."""
         model_path.parent.mkdir(parents=True, exist_ok=True)
