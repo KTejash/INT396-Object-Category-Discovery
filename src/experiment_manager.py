@@ -173,3 +173,56 @@ class ExperimentManager:
         """Exports experiment summary as CSV string."""
         df = self.list_experiments()
         return df.to_csv(index=False)
+
+    def delete_experiment(self, experiment_id: str) -> bool:
+        """Removes a specific experiment record from the registry."""
+        experiments = self._load_raw()
+        filtered = [e for e in experiments if e.get("experiment_id") != experiment_id]
+        if len(filtered) < len(experiments):
+            self._save_raw(filtered)
+            return True
+        return False
+
+    def generate_markdown_report(self, experiment_id: str) -> str:
+        """Generates an academic report formatted in Markdown for a single experiment."""
+        experiments = self._load_raw()
+        match = next((e for e in experiments if e.get("experiment_id") == experiment_id), None)
+        if not match:
+            return f"Experiment '{experiment_id}' not found."
+
+        m = match.get("metrics", {})
+        km = match.get("kmeans_config", {})
+        pca = match.get("pca_config", {})
+
+        report = f"""# Experiment Report: {match.get('experiment_name')}
+**Experiment ID:** `{match.get('experiment_id')}`  
+**Timestamp:** {match.get('timestamp')}  
+**Dataset:** `{match.get('dataset_name')}` ({match.get('sample_count')} images)
+
+---
+
+## 1. Feature Representation & Pipeline
+- **Feature Extraction Method:** `{match.get('feature_type')}`
+- **Feature Preprocessing:** `{match.get('scaler_type')}`
+- **PCA Dimensionality Reduction:** {pca}
+- **Clustering Configuration:** K-Means with k={km.get('k', 'N/A')}
+
+---
+
+## 2. Quantitative Evaluation Metrics
+| Metric | Value |
+|---|---|
+| Inertia (WCSS) | `{m.get('inertia_wcss', 'N/A')}` |
+| Silhouette Score | `{m.get('silhouette_score', 'N/A')}` |
+| Davies-Bouldin Index | `{m.get('davies_bouldin_index', 'N/A')}` |
+| Calinski-Harabasz Score | `{m.get('calinski_harabasz_score', 'N/A')}` |
+| Adjusted Rand Index (ARI) | `{m.get('ari', 'N/A')}` |
+| Normalized Mutual Information (NMI) | `{m.get('nmi', 'N/A')}` |
+
+---
+
+## 3. Notes & Observations
+> {match.get('notes', 'No notes provided.')}
+"""
+        return report
+
