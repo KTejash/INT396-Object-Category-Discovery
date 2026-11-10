@@ -691,11 +691,11 @@ elif selected_page == "8. Discovered Cluster Gallery":
     st.markdown("Inspect centroid exemplars (minimum Euclidean distance to cluster centers) and image member assignments.")
 
     if st.session_state.cluster_labels is None:
-        st.warning("Please run K-Means Clustering first.")
+        st.warning("Please run K-Means Clustering first (Step 7).")
     else:
         labels = st.session_state.cluster_labels
         unique_k = sorted(list(np.unique(labels)))
-        
+
         # Display cluster distribution
         fig_dist = viz.plot_cluster_distribution(labels)
         st.plotly_chart(fig_dist, width="stretch")
@@ -714,19 +714,46 @@ elif selected_page == "8. Discovered Cluster Gallery":
         if search_query:
             cluster_members = cluster_members[cluster_members["image_id"].astype(str).str.contains(search_query, case=False)]
 
-        st.markdown(f"Displaying **{len(cluster_members)}** images in Cluster {chosen_cluster}:")
+        n_found = len(cluster_members)
+        st.markdown(f"Displaying **{n_found}** images in Cluster {chosen_cluster}:")
 
-        # Display images in responsive grid
+        # Display images in responsive grid — show placeholder for missing files
         cols = st.columns(4)
+        shown = 0
         for i, (_, row) in enumerate(cluster_members.head(16).iterrows()):
             col = cols[i % 4]
             img_rel = row["file_path"]
             img_abs = PROJECT_ROOT / img_rel
-            if img_abs.exists():
-                with col:
-                    img = Image.open(img_abs)
-                    st.image(img, caption=f"{row['image_id']} ({row.get('format', 'IMG')})", width="stretch")
+            with col:
+                if img_abs.exists():
+                    try:
+                        img = Image.open(img_abs)
+                        st.image(img, caption=f"{row['image_id']}", width="stretch")
+                        shown += 1
+                    except Exception:
+                        st.markdown(
+                            f"<div style='background:#1c2541;border:1px dashed #3a86ff;border-radius:8px;"
+                            f"padding:12px;text-align:center;color:#90e0ef;font-size:0.8rem;'>"
+                            f"⚠️ Unreadable<br><small>{row['image_id']}</small></div>",
+                            unsafe_allow_html=True
+                        )
+                else:
+                    st.markdown(
+                        f"<div style='background:#1c2541;border:1px dashed #ffb703;border-radius:8px;"
+                        f"padding:12px;text-align:center;color:#ffb703;font-size:0.8rem;'>"
+                        f"📂 Not on disk<br><small>{row['image_id']}</small></div>",
+                        unsafe_allow_html=True
+                    )
 
+        if shown == 0 and n_found > 0:
+            st.info(
+                "ℹ️ Image files for this cluster are not on disk. "
+                "This can happen when using the benchmark Open Images dataset with only pre-computed features. "
+                "Switch to the **Open Images Benchmark** dataset in Step 2 and re-download images, "
+                "or upload your own images via **My Custom Images**."
+            )
+
+        st.markdown("---")
         # Download cluster manifest
         st.download_button(
             "Download This Cluster's Image Manifest (CSV)",
@@ -743,33 +770,81 @@ elif selected_page == "9. Image Discovery Studio":
     st.header("Image Discovery Studio (Live Inference & Visual Search)")
     st.markdown("""
     <div class="lab-card">
-        <strong>Unsupervised Visual Inference:</strong> Upload any novel image from your computer. 
-        The system extracts its representation, applies the active preprocessing and PCA pipelines, 
-        projects it onto the discovered cluster landscape, assigns it to its nearest centroid, 
-        and retrieves its closest visual neighbors.
+        <strong>Universal Visual Inference:</strong> Upload any image — even objects outside the dataset
+        (fruits, food, random objects). The <em>ImageNet Universal Classifier</em> always identifies
+        what the object is. If you have run the full pipeline (Feature Extraction → Preprocessing →
+        PCA → K-Means), cluster placement and nearest-neighbor search are also shown.
     </div>
     """, unsafe_allow_html=True)
 
-    if st.session_state.cluster_centroids is None:
-        st.warning("Please run K-Means Clustering to compute cluster centroids before testing the studio.")
-    else:
-        st.markdown("### 📤 Upload Query Image for Live Category & Cluster Prediction")
-        uploaded_probe = st.file_uploader(
-            "Choose an image from your computer to predict (JPG, JPEG, PNG, WEBP):",
-            type=["jpg", "jpeg", "png", "webp"]
+    # ── Pipeline readiness check ──────────────────────────────────────────────
+    pipeline_ready = (
+        st.session_state.cluster_centroids is not None
+        and st.session_state.features_pca is not None
+        or st.session_state.cluster_centroids is not None
+        and st.session_state.features_scaled is not None
+    )
+
+    if not pipeline_ready:
+        st.info(
+            "ℹ️ **Cluster pipeline not yet initialised for the active dataset.**  \n"
+            "The **ImageNet Universal Classifier** below works immediately for any image.  \n"
+            "For cluster-placement and k-NN results, complete **Steps 3 → 4 → 5 → 7** first."
         )
 
-        if uploaded_probe is not None:
-            col_in1, col_in2 = st.columns([1, 2])
+    # ── Upload widget — always visible ───────────────────────────────────────
+    st.markdown("### 📤 Upload Query Image for Live Category & Cluster Prediction")
+    uploaded_probe = st.file_uploader(
+        "Choose an image from your computer to predict (JPG, JPEG, PNG, WEBP):",
+        type=["jpg", "jpeg", "png", "webp"]
+    )
 
-            with col_in1:
-                st.subheader("Uploaded Query Image")
-                probe_img = Image.open(uploaded_probe)
-                st.image(probe_img, caption="Query Image", width="stretch")
+    if uploaded_probe is not None:
+        probe_img = Image.open(io.BytesIO(uploaded_probe.getvalue())).convert("RGB")
 
-            with col_in2:
-                st.subheader("Live Prediction & Placement Analysis")
-                with st.spinner("Extracting features, transforming representation, and predicting category..."):
+        col_in1, col_in2 = st.columns([1, 2])
+        with col_in1:
+            st.subheader("Uploaded Query Image")
+            st.image(probe_img, caption="Query Image", width="stretch")
+
+        with col_in2:
+            st.subheader("🧠 What ResNet-50 Sees (ImageNet Universal Classifier)")
+            with st.spinner("Running 1000-class ImageNet classification..."):
+                try:
+                    universal = st.session_state.feature_extractor.predict_universal_class(probe_img)
+                    top_name = universal["top_object_name"]
+                    top_prob = universal["top_probability"]
+                    benchmark_eq = universal["benchmark_equivalent"]
+                    top5_df = universal["top5_classes"]
+
+                    if benchmark_eq is not None:
+                        st.success(
+                            f"✅ **Identified as:** {top_name}  \n"
+                            f"→ Dataset Category: **{benchmark_eq}** ({top_prob:.1f}% ImageNet confidence)"
+                        )
+                    else:
+                        st.warning(
+                            f"⚠️ **Out-of-Distribution Object Detected**  \n"
+                            f"ResNet-50 identifies this as **{top_name}** ({top_prob:.1f}% confidence).  \n"
+                            f"This object is **not** one of the 8 INT396 classes "
+                            f"(Bird, Boat, Building, Bus, Car, Cat, Dog, Flower).  \n"
+                            f"Cluster placement below is based on visual feature similarity only — "
+                            f"treat it as approximate."
+                        )
+
+                    st.markdown("**Top-5 ImageNet Predictions:**")
+                    st.dataframe(top5_df, hide_index=True, width="stretch")
+
+                except Exception as exc:
+                    st.error(f"Universal classifier error: {exc}")
+                    benchmark_eq = None
+
+        # ── Cluster placement (only when pipeline is ready) ──────────────────
+        if pipeline_ready:
+            st.markdown("---")
+            st.subheader("🎯 Dataset Cluster Placement & k-NN Prediction")
+            with st.spinner("Projecting into cluster space and finding nearest neighbours..."):
+                try:
                     dm = st.session_state.dataset_manager
                     df_gt = dm.load_ground_truth()
 
@@ -778,74 +853,99 @@ elif selected_page == "9. Image Discovery Studio":
                         scaler=st.session_state.scaler_pipeline,
                         pca_manager=st.session_state.pca_manager,
                         centroids=st.session_state.cluster_centroids,
-                        dataset_features=st.session_state.features_pca if st.session_state.features_pca is not None else st.session_state.features_scaled,
+                        dataset_features=(
+                            st.session_state.features_pca
+                            if st.session_state.features_pca is not None
+                            else st.session_state.features_scaled
+                        ),
                         df_manifest=st.session_state.manifest_df,
                         df_ground_truth=df_gt,
                         cluster_labels=st.session_state.cluster_labels
                     )
-                    probe_bytes = uploaded_probe.getvalue()
                     results = studio.predict_image(
-                        probe_bytes,
+                        uploaded_probe.getvalue(),
                         feature_type=st.session_state.feature_type,
                         top_k_neighbors=6
                     )
+                    cluster_ok = True
+                except Exception as exc:
+                    st.error(f"Cluster prediction error: {exc}")
+                    cluster_ok = False
 
+            if cluster_ok:
                 c_assigned = results["nearest_cluster_id"]
                 c_dist = results["min_centroid_distance"]
                 pred_cat = results["predicted_category"]
                 pred_conf = results["prediction_confidence"]
                 dom_info = results.get("cluster_dominant_info", {})
 
-                # High-visibility prediction cards
                 col_m1, col_m2 = st.columns(2)
                 with col_m1:
                     st.markdown(f"""
-                    <div style="background: rgba(0, 245, 212, 0.12); border: 2px solid #00f5d4; border-radius: 12px; padding: 16px; margin-bottom: 12px;">
-                        <span style="font-size: 0.85rem; color: #00f5d4; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;">Predicted Category</span>
-                        <div style="font-size: 1.8rem; font-weight: 800; color: #ffffff; margin-top: 4px;">🏷️ {pred_cat}</div>
-                        <div style="font-size: 0.95rem; color: #a0aec0; margin-top: 4px;">Confidence: <strong>{pred_conf:.1f}%</strong></div>
+                    <div style="background: rgba(0,245,212,0.12); border: 2px solid #00f5d4;
+                                border-radius: 12px; padding: 16px; margin-bottom: 12px;">
+                        <span style="font-size:0.85rem; color:#00f5d4; text-transform:uppercase;
+                                     letter-spacing:1px; font-weight:bold;">Cluster Category Prediction</span>
+                        <div style="font-size:1.8rem; font-weight:800; color:#ffffff; margin-top:4px;">
+                            🏷️ {pred_cat}
+                        </div>
+                        <div style="font-size:0.95rem; color:#a0aec0; margin-top:4px;">
+                            k-NN Confidence: <strong>{pred_conf:.1f}%</strong>
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
                 with col_m2:
                     st.markdown(f"""
-                    <div style="background: rgba(58, 134, 255, 0.12); border: 2px solid #3a86ff; border-radius: 12px; padding: 16px; margin-bottom: 12px;">
-                        <span style="font-size: 0.85rem; color: #3a86ff; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;">Discovered Cluster</span>
-                        <div style="font-size: 1.8rem; font-weight: 800; color: #ffffff; margin-top: 4px;">🎯 Cluster #{c_assigned}</div>
-                        <div style="font-size: 0.95rem; color: #a0aec0; margin-top: 4px;">Centroid Distance: <strong>{c_dist:.4f}</strong> (Purity: {dom_info.get('purity', 1.0)*100:.1f}%)</div>
+                    <div style="background: rgba(58,134,255,0.12); border: 2px solid #3a86ff;
+                                border-radius: 12px; padding: 16px; margin-bottom: 12px;">
+                        <span style="font-size:0.85rem; color:#3a86ff; text-transform:uppercase;
+                                     letter-spacing:1px; font-weight:bold;">Discovered Cluster</span>
+                        <div style="font-size:1.8rem; font-weight:800; color:#ffffff; margin-top:4px;">
+                            🎯 Cluster #{c_assigned}
+                        </div>
+                        <div style="font-size:0.95rem; color:#a0aec0; margin-top:4px;">
+                            Centroid Distance: <strong>{c_dist:.4f}</strong>
+                            &nbsp;|&nbsp; Purity: {dom_info.get('purity', 1.0)*100:.1f}%
+                        </div>
                     </div>
                     """, unsafe_allow_html=True)
 
-                # Confidence breakdown chart
                 df_probs = results["probabilities_df"]
                 if not df_probs.empty:
                     fig_probs = viz.plot_prediction_confidence_bar(df_probs, pred_cat)
                     st.plotly_chart(fig_probs, width="stretch")
 
-            st.markdown("---")
-            col_rank1, col_rank2 = st.columns([1, 1])
-            with col_rank1:
-                st.subheader("Cluster Centroid Proximity Ranking")
-                st.dataframe(results["cluster_distance_ranking"], width="stretch", hide_index=True)
-            with col_rank2:
-                st.subheader("Category Probability Distribution")
-                if not df_probs.empty:
-                    st.dataframe(df_probs, width="stretch", hide_index=True)
+                st.markdown("---")
+                col_rank1, col_rank2 = st.columns([1, 1])
+                with col_rank1:
+                    st.subheader("Cluster Centroid Proximity Ranking")
+                    st.dataframe(results["cluster_distance_ranking"], width="stretch", hide_index=True)
+                with col_rank2:
+                    st.subheader("Category Probability Distribution")
+                    if not df_probs.empty:
+                        st.dataframe(df_probs, width="stretch", hide_index=True)
+                    else:
+                        st.info("No ground-truth labels available for semantic class probabilities.")
+
+                st.markdown("---")
+                st.subheader("Top Visually Similar Neighbours from Dataset")
+                df_sim = results["similar_images"]
+                if not df_sim.empty:
+                    n_cols = min(len(df_sim), 6)
+                    cols_sim = st.columns(n_cols)
+                    shown_nn = 0
+                    for idx, row in df_sim.iterrows():
+                        sim_p = PROJECT_ROOT / row["File_Path"]
+                        if sim_p.exists():
+                            col_nn = cols_sim[shown_nn % n_cols]
+                            with col_nn:
+                                caption_text = f"#{row['Rank']} {row.get('Category', '')} ({row.get('Similarity_Pct', '')})"
+                                st.image(Image.open(sim_p), caption=caption_text, width="stretch")
+                            shown_nn += 1
+                    if shown_nn == 0:
+                        st.info("Neighbour images are not stored on disk for this dataset — only pre-computed features are available.")
                 else:
-                    st.info("No ground-truth labels available to compute semantic class probabilities.")
-
-            st.markdown("---")
-            st.subheader("Top Visually Similar Neighbors from Dataset")
-            df_sim = results["similar_images"]
-
-            if not df_sim.empty:
-                cols_sim = st.columns(len(df_sim))
-                for idx, row in df_sim.iterrows():
-                    col = cols_sim[idx]
-                    sim_p = PROJECT_ROOT / row["File_Path"]
-                    if sim_p.exists():
-                        with col:
-                            caption_text = f"#{row['Rank']} {row.get('Category', '')} ({row.get('Similarity_Pct', '')})"
-                            st.image(Image.open(sim_p), caption=caption_text, width="stretch")
+                    st.info("No dataset neighbours found — ensure Feature Extraction has been run on the active dataset.")
 
 
 
@@ -933,7 +1033,21 @@ elif selected_page == "11. External Validation":
     df_gt = dm.load_ground_truth()
 
     if df_gt is None or df_gt.empty:
-        st.info("No ground-truth labels found for the current dataset. External validation is unavailable for unannotated datasets.")
+        active_ds = st.session_state.current_dataset_name
+        is_custom = "custom" in active_ds.lower() if active_ds else True
+        if is_custom:
+            st.info(
+                "ℹ️ **This is expected for custom uploaded datasets.**  \n"
+                "Ground-truth category labels only exist for the **Open Images Benchmark** dataset "
+                "(Bird, Boat, Building, Bus, Car, Cat, Dog, Flower).  \n\n"
+                "To use external validation:  \n"
+                "1. Go to **Step 2 — Dataset Workspace**  \n"
+                "2. Switch to **Open Images Benchmark** dataset  \n"
+                "3. Re-run Steps 3 → 4 → 5 → 7 on the benchmark dataset  \n"
+                "4. Return here — validation metrics will appear automatically."
+            )
+        else:
+            st.info("No ground-truth labels found for the current dataset. External validation is unavailable for unannotated datasets.")
     elif st.session_state.cluster_labels is None:
         st.warning("Please run K-Means Clustering first.")
     else:

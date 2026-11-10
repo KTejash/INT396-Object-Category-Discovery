@@ -33,6 +33,7 @@ from src.config import (
 )
 
 _CACHED_RESNET_MODEL = None
+_CACHED_FULL_CLASSIFIER = None
 
 
 def get_resnet50_model(device: Optional[torch.device] = None) -> nn.Module:
@@ -49,6 +50,22 @@ def get_resnet50_model(device: Optional[torch.device] = None) -> nn.Module:
         model.eval()
         _CACHED_RESNET_MODEL = model
     return _CACHED_RESNET_MODEL
+
+
+def get_full_classifier_model(device: Optional[torch.device] = None) -> nn.Module:
+    """Loads and caches full ResNet50 model with pretrained 1000-class ImageNet head."""
+    global _CACHED_FULL_CLASSIFIER
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    if _CACHED_FULL_CLASSIFIER is None:
+        weights = models.ResNet50_Weights.DEFAULT
+        model = models.resnet50(weights=weights)
+        model = model.to(device)
+        model.eval()
+        _CACHED_FULL_CLASSIFIER = model
+    return _CACHED_FULL_CLASSIFIER
+
 
 
 class PathDataset(torch.utils.data.Dataset):
@@ -86,6 +103,97 @@ class FeatureExtractor:
     def get_resnet50_model(self) -> nn.Module:
         """Returns cached ResNet50 model instance."""
         return get_resnet50_model(self.device)
+
+    def predict_universal_class(self, img: Image.Image) -> Dict[str, Any]:
+        """
+        Runs the full 1000-class ImageNet classifier to accurately identify
+        any real-world object (e.g. Orange, Banana, Persian Cat, Sports Car).
+        """
+        model = get_full_classifier_model(self.device)
+        t_img = self.resnet_transform(img).unsqueeze(0).to(self.device)
+        with torch.no_grad():
+            logits = model(t_img)
+            probs = torch.softmax(logits, dim=1).cpu().numpy()[0]
+
+        top5_indices = np.argsort(probs)[::-1][:5]
+        categories = self.weights.meta["categories"]
+
+        top_raw_name = categories[top5_indices[0]]
+        top_name = top_raw_name.replace("_", " ").title()
+        top_prob = float(probs[top5_indices[0]] * 100)
+
+        # Check for benchmark category mapping
+        benchmark_mapping = self.map_imagenet_to_benchmark(top_raw_name)
+
+        top5_list = []
+        for idx in top5_indices:
+            top5_list.append({
+                "Object_Class": categories[idx].replace("_", " ").title(),
+                "Probability_Pct": round(float(probs[idx] * 100), 2)
+            })
+
+        return {
+            "top_object_name": top_name,
+            "top_probability": round(top_prob, 2),
+            "benchmark_equivalent": benchmark_mapping,
+            "top5_classes": pd.DataFrame(top5_list)
+        }
+
+    @staticmethod
+    def map_imagenet_to_benchmark(imagenet_label: str) -> Optional[str]:
+        """
+        Maps granular ImageNet classes to the 8 INT396 benchmark classes
+        [Bird, Boat, Building, Bus, Car, Cat, Dog, Flower].
+        Returns None if the object is Out-of-Distribution (e.g. orange, banana).
+        """
+        lbl = imagenet_label.lower().replace("_", " ")
+
+        birds = ["bird", "robin", "hummingbird", "jay", "magpie", "chickadee", "kite",
+                 "eagle", "vulture", "owl", "ostrich", "albatross", "pelican", "flamingo",
+                 "heron", "crane", "duck", "goose", "swan", "cock", "hen", "turkey",
+                 "quail", "partridge", "peacock", "macaw", "parrot", "lorikeet", "toucan"]
+        if any(b in lbl for b in birds):
+            return "Bird"
+
+        boats = ["boat", "canoe", "kayak", "gondola", "speedboat", "lifeboat", "catamaran",
+                 "trimaran", "yawl", "schooner", "aircraft carrier", "submarine", "liner",
+                 "ship", "ferry"]
+        if any(b in lbl for b in boats):
+            return "Boat"
+
+        buildings = ["building", "church", "cathedral", "monastery", "mosque", "temple",
+                     "castle", "palace", "beacon", "lighthouse", "boathouse", "barn",
+                     "library", "restaurant", "cinema", "planetarium", "prison"]
+        if any(b in lbl for b in buildings):
+            return "Building"
+
+        buses = ["bus", "minibus", "school bus", "trolleybus", "double-decker"]
+        if any(b in lbl for b in buses):
+            return "Bus"
+
+        cars = ["car", "cab", "taxi", "convertible", "sports car", "limousine", "minivan",
+                "jeep", "suv", "coupe", "sedan", "racer", "model t"]
+        if any(b in lbl for b in cars):
+            return "Car"
+
+        cats = ["cat", "tabby", "tiger cat", "persian cat", "siamese cat", "egyptian cat",
+                "lynx", "leopard", "jaguar", "lion", "cheetah"]
+        if any(c in lbl for c in cats):
+            return "Cat"
+
+        dogs = ["dog", "terrier", "retriever", "hound", "shepherd", "spaniel", "poodle",
+                "bulldog", "boxer", "chihuahua", "mastiff", "husky", "malamute", "collie",
+                "corgi", "dalmatian", "pug", "beagle", "rottweiler", "doberman", "dingo"]
+        if any(d in lbl for d in dogs):
+            return "Dog"
+
+        flowers = ["flower", "daisy", "sunflower", "tulip", "rose", "orchid", "lily",
+                   "pot", "vase", "garden", "blossom", "poppy", "dahlia", "carnation"]
+        if any(f in lbl for f in flowers):
+            return "Flower"
+
+        return None
+
 
     def extract_resnet50(
         self,
