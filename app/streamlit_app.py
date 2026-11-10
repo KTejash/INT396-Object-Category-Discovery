@@ -753,7 +753,11 @@ elif selected_page == "9. Image Discovery Studio":
     if st.session_state.cluster_centroids is None:
         st.warning("Please run K-Means Clustering to compute cluster centroids before testing the studio.")
     else:
-        uploaded_probe = st.file_uploader("Upload an Image to Analyze (JPG, PNG, WEBP):", type=["jpg", "jpeg", "png", "webp"])
+        st.markdown("### 📤 Upload Query Image for Live Category & Cluster Prediction")
+        uploaded_probe = st.file_uploader(
+            "Choose an image from your computer to predict (JPG, JPEG, PNG, WEBP):",
+            type=["jpg", "jpeg", "png", "webp"]
+        )
 
         if uploaded_probe is not None:
             col_in1, col_in2 = st.columns([1, 2])
@@ -764,18 +768,23 @@ elif selected_page == "9. Image Discovery Studio":
                 st.image(probe_img, caption="Query Image", width="stretch")
 
             with col_in2:
-                st.subheader("Unsupervised Placement Analysis")
-                with st.spinner("Extracting features, transforming, and comparing with centroids..."):
+                st.subheader("Live Prediction & Placement Analysis")
+                with st.spinner("Extracting features, transforming representation, and predicting category..."):
+                    dm = st.session_state.dataset_manager
+                    df_gt = dm.load_ground_truth()
+
                     studio = ImageDiscoveryStudio(
                         feature_extractor=st.session_state.feature_extractor,
                         scaler=st.session_state.scaler_pipeline,
                         pca_manager=st.session_state.pca_manager,
                         centroids=st.session_state.cluster_centroids,
                         dataset_features=st.session_state.features_pca if st.session_state.features_pca is not None else st.session_state.features_scaled,
-                        df_manifest=st.session_state.manifest_df
+                        df_manifest=st.session_state.manifest_df,
+                        df_ground_truth=df_gt,
+                        cluster_labels=st.session_state.cluster_labels
                     )
                     probe_bytes = uploaded_probe.getvalue()
-                    results = studio.process_and_assign(
+                    results = studio.predict_image(
                         probe_bytes,
                         feature_type=st.session_state.feature_type,
                         top_k_neighbors=6
@@ -783,12 +792,46 @@ elif selected_page == "9. Image Discovery Studio":
 
                 c_assigned = results["nearest_cluster_id"]
                 c_dist = results["min_centroid_distance"]
+                pred_cat = results["predicted_category"]
+                pred_conf = results["prediction_confidence"]
+                dom_info = results.get("cluster_dominant_info", {})
 
-                st.metric("Nearest Discovered Cluster", f"Cluster {c_assigned}")
-                st.metric("Distance to Centroid", f"{c_dist:.4f}")
+                # High-visibility prediction cards
+                col_m1, col_m2 = st.columns(2)
+                with col_m1:
+                    st.markdown(f"""
+                    <div style="background: rgba(0, 245, 212, 0.12); border: 2px solid #00f5d4; border-radius: 12px; padding: 16px; margin-bottom: 12px;">
+                        <span style="font-size: 0.85rem; color: #00f5d4; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;">Predicted Category</span>
+                        <div style="font-size: 1.8rem; font-weight: 800; color: #ffffff; margin-top: 4px;">🏷️ {pred_cat}</div>
+                        <div style="font-size: 0.95rem; color: #a0aec0; margin-top: 4px;">Confidence: <strong>{pred_conf:.1f}%</strong></div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_m2:
+                    st.markdown(f"""
+                    <div style="background: rgba(58, 134, 255, 0.12); border: 2px solid #3a86ff; border-radius: 12px; padding: 16px; margin-bottom: 12px;">
+                        <span style="font-size: 0.85rem; color: #3a86ff; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;">Discovered Cluster</span>
+                        <div style="font-size: 1.8rem; font-weight: 800; color: #ffffff; margin-top: 4px;">🎯 Cluster #{c_assigned}</div>
+                        <div style="font-size: 0.95rem; color: #a0aec0; margin-top: 4px;">Centroid Distance: <strong>{c_dist:.4f}</strong> (Purity: {dom_info.get('purity', 1.0)*100:.1f}%)</div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-                st.markdown("**Proximity Across All Clusters:**")
+                # Confidence breakdown chart
+                df_probs = results["probabilities_df"]
+                if not df_probs.empty:
+                    fig_probs = viz.plot_prediction_confidence_bar(df_probs, pred_cat)
+                    st.plotly_chart(fig_probs, width="stretch")
+
+            st.markdown("---")
+            col_rank1, col_rank2 = st.columns([1, 1])
+            with col_rank1:
+                st.subheader("Cluster Centroid Proximity Ranking")
                 st.dataframe(results["cluster_distance_ranking"], width="stretch", hide_index=True)
+            with col_rank2:
+                st.subheader("Category Probability Distribution")
+                if not df_probs.empty:
+                    st.dataframe(df_probs, width="stretch", hide_index=True)
+                else:
+                    st.info("No ground-truth labels available to compute semantic class probabilities.")
 
             st.markdown("---")
             st.subheader("Top Visually Similar Neighbors from Dataset")
@@ -801,7 +844,9 @@ elif selected_page == "9. Image Discovery Studio":
                     sim_p = PROJECT_ROOT / row["File_Path"]
                     if sim_p.exists():
                         with col:
-                            st.image(Image.open(sim_p), caption=f"Rank #{row['Rank']} (d={row['Distance']:.2f})", width="stretch")
+                            caption_text = f"#{row['Rank']} {row.get('Category', '')} ({row.get('Similarity_Pct', '')})"
+                            st.image(Image.open(sim_p), caption=caption_text, width="stretch")
+
 
 
 # ==============================================================================
