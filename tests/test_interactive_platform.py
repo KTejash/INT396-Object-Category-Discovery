@@ -127,21 +127,30 @@ def test_end_to_end_platform():
     assert not exemplars_df.empty
     print(f"  [PASS] Extracted {len(exemplars_df)} centroid exemplars.")
 
-    # 7. Test Image Discovery Studio (Novel Image Query)
-    print("\n[TEST 7] Testing Image Discovery Studio (Query Inference)...")
+    # 7. Test Image Discovery Studio & Real-Time Category Prediction
+    print("\n[TEST 7] Testing Image Discovery Studio (Query Inference & Prediction)...")
+    synthetic_gt = pd.DataFrame({
+        "image_id": df_m["image_id"],
+        "category": ["Vehicle", "Vehicle", "Animal", "Animal", "Plant", "Plant"]
+    })
     studio = ImageDiscoveryStudio(
         feature_extractor=extractor,
         scaler=scaler,
         pca_manager=pca_mgr,
         centroids=cluster_engine.centroids_,
         dataset_features=X_pca,
-        df_manifest=df_m
+        df_manifest=df_m,
+        df_ground_truth=synthetic_gt,
+        cluster_labels=labels_k3
     )
     query_im = Image.new("RGB", (64, 64), color=(250, 10, 10))
-    query_results = studio.process_and_assign(query_im, feature_type="resnet50", top_k_neighbors=3)
+    query_results = studio.predict_image(query_im, feature_type="resnet50", top_k_neighbors=3)
     assert "nearest_cluster_id" in query_results
+    assert "predicted_category" in query_results
+    assert "prediction_confidence" in query_results
     assert len(query_results["similar_images"]) == 3
     print(f"  [PASS] Query assigned to Cluster {query_results['nearest_cluster_id']} (Distance: {query_results['min_centroid_distance']})")
+    print(f"  [PASS] Predicted Category: {query_results['predicted_category']} (Confidence: {query_results['prediction_confidence']}%)")
 
     # 8. Test Experiment Manager
     print("\n[TEST 8] Testing Experiment Manager Logging & Comparison...")
