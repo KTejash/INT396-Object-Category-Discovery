@@ -63,6 +63,12 @@ class ExternalValidator:
             columns=[f"Cluster_{c}" for c in unique_clusters]
         )
 
+        # Hungarian optimal matching accuracy
+        row_ind, col_ind = linear_sum_assignment(-cont_mat)
+        optimal_matches = cont_mat[row_ind, col_ind].sum()
+        total_samples = len(true_labels)
+        clustering_acc = round(float(optimal_matches / max(total_samples, 1)), 4)
+
         # Row-normalized contingency matrix (Percentage of each true class assigned to each cluster)
         row_sums = cont_mat.sum(axis=1, keepdims=True)
         cont_norm = np.where(row_sums > 0, cont_mat / row_sums * 100.0, 0.0)
@@ -74,6 +80,7 @@ class ExternalValidator:
 
         metrics_summary = pd.DataFrame({
             "Metric": [
+                "Clustering Accuracy (Hungarian ACC)",
                 "Adjusted Rand Index (ARI)",
                 "Normalized Mutual Information (NMI)",
                 "V-Measure",
@@ -83,6 +90,7 @@ class ExternalValidator:
                 "Discovered Cluster Count"
             ],
             "Score": [
+                f"{clustering_acc * 100:.2f}%",
                 round(ari, 4),
                 round(nmi, 4),
                 round(v_meas, 4),
@@ -92,6 +100,7 @@ class ExternalValidator:
                 len(unique_clusters)
             ],
             "Interpretation": [
+                "Optimal 1-to-1 matching accuracy between unsupervised clusters and ground-truth classes.",
                 "Chance-adjusted pairwise agreement [-1.0, 1.0]. 0 = random chance.",
                 "Information-theoretic overlap [0.0, 1.0]. Higher = stronger mutual info.",
                 "Harmonic mean of homogeneity and completeness.",
@@ -104,6 +113,8 @@ class ExternalValidator:
 
         return {
             "available": True,
+            "accuracy": clustering_acc,
+            "accuracy_pct": round(clustering_acc * 100, 2),
             "ari": round(ari, 4),
             "nmi": round(nmi, 4),
             "v_measure": round(v_meas, 4),

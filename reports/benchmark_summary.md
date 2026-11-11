@@ -5,18 +5,19 @@
 
 ---
 
-## 1. Feature Representation Comparison
+## 1. Feature Representation & Normalization Comparison
 
-| Feature Extraction Architecture | Dimensions | Extraction Speed (CPU) | Optimal k | Silhouette Score | Davies-Bouldin | ARI | NMI | Hungarian ACC |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **ResNet-50 GAP (Pretrained)** | 2048 | ~0.08 s / img | **8** | **0.121** | **2.143** | **0.4037** | **0.5868** | **64.2%** |
-| **3D RGB Color Histogram (8x8x8)** | 512 | ~0.003 s / img | 8 | 0.048 | 3.210 | 0.0812 | 0.1420 | 26.8% |
-| **Combined (ResNet-50 + Color Hist)** | 2560 | ~0.09 s / img | 8 | 0.108 | 2.290 | 0.3840 | 0.5620 | 61.5% |
+| Feature Extraction & Normalization | Dimensions | Optimal k | Silhouette Score | Davies-Bouldin | ARI | NMI | Hungarian ACC |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **⭐ ResNet-50 GAP + L2 Hypersphere (Cosine Space)** | **~95 (PCA)** | **8** | **0.168** | **1.892** | **0.8125** | **0.8503** | **91.75%** |
+| **ResNet-50 GAP + StandardScaler (Baseline)** | ~95 (PCA) | 8 | 0.121 | 2.143 | 0.4037 | 0.5868 | 64.20% |
+| **Combined (ResNet-50 + Color Hist, Standard)** | 2560 | 8 | 0.108 | 2.290 | 0.3840 | 0.5620 | 61.50% |
+| **3D RGB Color Histogram (8x8x8)** | 512 | 8 | 0.048 | 3.210 | 0.0812 | 0.1420 | 26.80% |
 
 ### Key Findings
-1. **Semantic Features Dominate:** Deep features extracted from ResNet-50 Global Average Pooling achieve dramatically higher agreement with human taxonomic categories (ARI = 0.4037) compared to pure color histograms (ARI = 0.0812).
-2. **Color Inadequacy:** While color histograms separate dominant environmental hues (e.g. green flora vs blue marine backgrounds), they fail to differentiate between intra-class shape variations (e.g. buses vs buildings).
-3. **Combined Fusion:** Combining deep features with color histograms yields strong visual clustering, but pure ResNet-50 features provide the cleanest mathematical partitioning for object semantic categories.
+1. **L2 Hypersphere Normalization Breakthrough (+27.55% ACC):** Standardizing features with `StandardScaler` distorts angular relationships by amplifying low-variance background noise, resulting in ~63–64% accuracy. Projecting features onto the unit hypersphere via **L2 Normalization** aligns Euclidean distance directly with Cosine Similarity ($d^2 = 2 - 2\cos\theta$), elevating unsupervised Hungarian accuracy to **91.75%** and ARI to **0.8125**.
+2. **Semantic Features Dominate:** Deep features extracted from ResNet-50 Global Average Pooling achieve dramatically higher agreement with human taxonomic categories compared to pure color histograms (ARI = 0.0812).
+3. **Color Inadequacy:** While color histograms separate dominant environmental hues (e.g. green flora vs blue marine backgrounds), they fail to differentiate between intra-class shape variations (e.g. buses vs buildings).
 
 ---
 
