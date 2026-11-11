@@ -146,10 +146,24 @@ In strict adherence to unsupervised machine learning principles:
 
 ## 👨‍💻 Team & Course Information
 
-| Role | Name | GitHub |
-|------|------|--------|
-| Team Member | Tejash Kumar Singh | [@KTejash](https://github.com/KTejash) |
-| Team Member | Gundumalla PurnaChandra Santosh | [@GPCSantosh](https://github.com/GPCSantosh) |
+| Role | Name | GitHub | Primary Contributions |
+|------|------|--------|-----------------------|
+| Team Member | Gundumalla PurnaChandra Santosh | [@GPCSantosh](https://github.com/GPCSantosh) | Mathematical optimization, L2 hypersphere normalization (91.8% accuracy), t-SNE stability & Hungarian validation |
+| Team Member | Tejash Kumar Singh | [@KTejash](https://github.com/KTejash) | Deep CNN feature extraction, interactive 13-page Streamlit lab, universal prediction studio & dataset curation |
 
 - **Course:** INT396 — Natural Object-Category Discovery from Image Features Using Clustering  
 - **Project:** VisionCluster AI — Interactive Unsupervised Object Discovery Platform
+
+### 🤝 Detailed Work Distribution & Contributions
+
+#### Gundumalla PurnaChandra Santosh ([@GPCSantosh](https://github.com/GPCSantosh))
+* **L2 Hypersphere Normalization & Accuracy Elevation:** Investigated why baseline standardization hit an accuracy plateau around ~63%. Formulated and implemented unit hypersphere projection ($\|\mathbf{x}\|_2 = 1$) to align Euclidean distance with Cosine similarity ($d^2 = 2 - 2\cos\theta$), elevating unsupervised Hungarian clustering accuracy to **91.75%** and ARI to **0.8125**.
+* **Dimensionality Reduction & Manifold Stability:** Resolved mathematical boundary constraints for small-sample t-SNE projections with adaptive perplexity clamping, preventing divergence when running custom user uploads.
+* **Post-Hoc External Validation:** Implemented Hungarian bipartite matching via Scipy's `linear_sum_assignment` to compute optimal 1-to-1 cluster-to-class accuracy and purity contingency matrices.
+* **Data Serialization & Framework Hardening:** Refactored experiment catalog tabular exports to prevent Apache Arrow / PyArrow type mismatch errors during multi-run comparisons.
+
+#### Tejash Kumar Singh ([@KTejash](https://github.com/KTejash))
+* **Deep Representation Learning:** Engineered the dual-backbone feature extractor integrating pretrained ResNet-50 Global Average Pooling (2048-d) and 3D RGB Color Histograms (512-d).
+* **Interactive Laboratory Platform:** Architected the complete 13-page Streamlit application, dynamic state management, responsive dark-theme design, and real-time Plotly visualizations.
+* **Universal Inference Studio:** Developed the live Image Discovery Studio with 1000-class ImageNet universal object recognition and distance-weighted k-NN visual similarity retrieval.
+* **Dataset Engineering & Cross-Platform Orchestration:** Curated and balanced the 3,505-image Open Images benchmark dataset and created automated cross-platform startup scripts (`start.bat` & `start.sh`).
