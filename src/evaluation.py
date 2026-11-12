@@ -91,13 +91,13 @@ class ExternalValidator:
             ],
             "Score": [
                 f"{clustering_acc * 100:.2f}%",
-                round(ari, 4),
-                round(nmi, 4),
-                round(v_meas, 4),
-                round(homo, 4),
-                round(comp, 4),
-                len(unique_cats),
-                len(unique_clusters)
+                f"{ari:.4f}",
+                f"{nmi:.4f}",
+                f"{v_meas:.4f}",
+                f"{homo:.4f}",
+                f"{comp:.4f}",
+                str(len(unique_cats)),
+                str(len(unique_clusters))
             ],
             "Interpretation": [
                 "Optimal 1-to-1 matching accuracy between unsupervised clusters and ground-truth classes.",
@@ -109,7 +109,7 @@ class ExternalValidator:
                 f"{len(unique_cats)} human categories",
                 f"{len(unique_clusters)} algorithmic clusters"
             ]
-        })
+        }).astype(str)
 
         return {
             "available": True,
