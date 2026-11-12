@@ -1,5 +1,5 @@
 """
-Object Discovery Lab — Interactive Unsupervised AI Platform
+Object Discovery Lab — Interactive Unsupervised Platform
 A state-of-the-art interactive research laboratory for unsupervised image clustering,
 feature extraction, dimensionality reduction, dynamic cluster analysis, and visual search.
 """
@@ -179,7 +179,7 @@ init_session_state()
 st.sidebar.markdown("""
 <div style="text-align: center; padding: 10px 0 15px 0;">
     <h2 style="color: #48cae4; margin: 0; font-size: 1.35rem;">🔬 Object Discovery Lab</h2>
-    <p style="color: #90e0ef; font-size: 0.82rem; margin-top: 4px;">Interactive Unsupervised AI Platform</p>
+    <p style="color: #90e0ef; font-size: 0.82rem; margin-top: 4px;">Interactive Unsupervised Platform</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -238,7 +238,7 @@ st.sidebar.markdown(f"""
 if selected_page == "1. Executive Overview":
     st.markdown("""
     <div style="margin-bottom: 20px;">
-        <h1 style="color: #ffffff; font-size: 2.2rem; margin-bottom: 4px;">Object Discovery Lab — Interactive Unsupervised AI Platform</h1>
+        <h1 style="color: #ffffff; font-size: 2.2rem; margin-bottom: 4px;">Object Discovery Lab — Interactive Unsupervised Platform</h1>
         <p style="color: #48cae4; font-size: 1.05rem; font-weight: 500;">
             Real-Time Unsupervised Clustering, Feature Extraction, Manifold Learning, and Visual Search
         </p>
