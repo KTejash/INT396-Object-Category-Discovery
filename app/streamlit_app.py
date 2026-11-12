@@ -704,25 +704,39 @@ elif selected_page == "7. K-Means Clustering Lab":
     if X_in is None:
         st.warning("Please extract features and preprocess data before clustering.")
     else:
+        n_samples = X_in.shape[0]
+        max_k_allowed = max(2, min(12, n_samples))
+        default_k_val = min(DEFAULT_K, max_k_allowed)
+
+        if n_samples < 8:
+            st.warning(
+                f"⚠️ **Small Sample Alert:** The active dataset has only **{n_samples}** samples. "
+                f"Max clusters capped at k={max_k_allowed}. For full 8-class clustering, switch to "
+                "the **Open Images Benchmark** (3,505 images) in Step 2."
+            )
+
         col_km1, col_km2 = st.columns([1, 1])
 
         with col_km1:
             st.subheader("Clustering Configuration")
-            k_val = st.slider("Number of Clusters (k):", min_value=2, max_value=12, value=DEFAULT_K)
+            k_val = st.slider("Number of Clusters (k):", min_value=2, max_value=max_k_allowed, value=default_k_val)
             init_choice = st.selectbox("Initialization Method:", ["k-means++", "random"])
             n_init_val = st.slider("Number of Restarts (n_init):", min_value=1, max_value=25, value=10)
             max_iter_val = st.slider("Max Iterations:", min_value=100, max_value=500, value=300)
 
             if st.button("Execute K-Means Clustering"):
                 with st.spinner("Partitioning feature space..."):
-                    engine = ClusteringEngine(random_state=RANDOM_SEED)
-                    lbls, metrics = engine.fit_predict(
-                        X_in, k=k_val, init_method=init_choice, n_init=n_init_val, max_iter=max_iter_val
-                    )
-                st.session_state.cluster_labels = lbls
-                st.session_state.cluster_metrics = metrics
-                st.session_state.cluster_centroids = engine.centroids_
-                st.success(f"K-Means (k={k_val}) completed in {metrics['fit_time_seconds']}s! Silhouette: {metrics['silhouette_score']}")
+                    try:
+                        engine = ClusteringEngine(random_state=RANDOM_SEED)
+                        lbls, metrics = engine.fit_predict(
+                            X_in, k=k_val, init_method=init_choice, n_init=n_init_val, max_iter=max_iter_val
+                        )
+                        st.session_state.cluster_labels = lbls
+                        st.session_state.cluster_metrics = metrics
+                        st.session_state.cluster_centroids = engine.centroids_
+                        st.success(f"K-Means (k={k_val}) completed in {metrics['fit_time_seconds']}s! Silhouette: {metrics['silhouette_score']}")
+                    except Exception as err:
+                        st.error(f"K-Means execution error: {err}")
 
         with col_km2:
             st.subheader("Live Evaluation Metrics")
@@ -740,14 +754,17 @@ elif selected_page == "7. K-Means Clustering Lab":
 
         with col_sw1:
             st.subheader("Multi-K Parameter Sweep (Elbow & Silhouette)")
-            if st.button("Run Multi-K Sweep (k=2..12)"):
-                with st.spinner("Sweeping k=2..12..."):
-                    engine = ClusteringEngine(random_state=RANDOM_SEED)
-                    df_sweep = engine.run_k_sweep(X_in, k_min=2, k_max=12)
-                    st.session_state.df_k_sweep = df_sweep
-                st.success("Sweep complete!")
+            if st.button("Run Multi-K Sweep"):
+                with st.spinner(f"Sweeping k=2..{max_k_allowed}..."):
+                    try:
+                        engine = ClusteringEngine(random_state=RANDOM_SEED)
+                        df_sweep = engine.run_k_sweep(X_in, k_min=2, k_max=max_k_allowed)
+                        st.session_state.df_k_sweep = df_sweep
+                        st.success("Sweep complete!")
+                    except Exception as err:
+                        st.error(f"K-sweep error: {err}")
 
-            if "df_k_sweep" in st.session_state:
+            if "df_k_sweep" in st.session_state and not st.session_state.df_k_sweep.empty:
                 fig_sw = viz.plot_k_sweep_metrics(st.session_state.df_k_sweep)
                 st.plotly_chart(fig_sw, width="stretch")
                 fig_elb = viz.plot_elbow_wcss(st.session_state.df_k_sweep)
@@ -757,13 +774,16 @@ elif selected_page == "7. K-Means Clustering Lab":
             st.subheader("Random Seed Stability Analysis")
             if st.button("Test Random Seed Stability [21, 42, 100, 123]"):
                 with st.spinner("Evaluating seed stability..."):
-                    engine = ClusteringEngine(random_state=RANDOM_SEED)
-                    df_seeds, df_ari = engine.test_seed_stability(X_in, k=k_val)
-                    st.session_state.df_seed_ari = df_ari
-                    st.session_state.df_seed_stats = df_seeds
-                st.success("Seed stability test complete!")
+                    try:
+                        engine = ClusteringEngine(random_state=RANDOM_SEED)
+                        df_seeds, df_ari = engine.test_seed_stability(X_in, k=k_val)
+                        st.session_state.df_seed_ari = df_ari
+                        st.session_state.df_seed_stats = df_seeds
+                        st.success("Seed stability test complete!")
+                    except Exception as err:
+                        st.error(f"Seed stability error: {err}")
 
-            if "df_seed_ari" in st.session_state:
+            if "df_seed_ari" in st.session_state and not st.session_state.df_seed_ari.empty:
                 st.markdown("**Pairwise Adjusted Rand Index (Inter-Run Agreement):**")
                 st.dataframe(st.session_state.df_seed_ari, width="stretch")
                 st.dataframe(st.session_state.df_seed_stats, width="stretch", hide_index=True)

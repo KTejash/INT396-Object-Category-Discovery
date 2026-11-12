@@ -173,16 +173,22 @@ class ClusteringEngine:
         if seeds is None:
             seeds = STABILITY_SEEDS
 
+        n_samples = X.shape[0]
+        if n_samples < 2:
+            return pd.DataFrame(), pd.DataFrame()
+
+        safe_k = min(max(int(k), 2), n_samples)
+
         run_labels = {}
         run_stats = []
 
         for s in seeds:
-            km = KMeans(n_clusters=k, init="k-means++", n_init=10, random_state=s)
+            km = KMeans(n_clusters=safe_k, init="k-means++", n_init=10, random_state=s)
             lbls = km.fit_predict(X)
             run_labels[s] = lbls
 
-            sil = float(silhouette_score(X, lbls)) if X.shape[0] > k else np.nan
-            sizes = [int(np.sum(lbls == c)) for c in range(k)]
+            sil = float(silhouette_score(X, lbls)) if X.shape[0] > safe_k else np.nan
+            sizes = [int(np.sum(lbls == c)) for c in range(safe_k)]
 
             run_stats.append({
                 "Seed": s,
