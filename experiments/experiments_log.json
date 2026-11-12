@@ -257,5 +257,42 @@
       "max_cluster_size": 4
     },
     "notes": "Automated test validation"
+  },
+  {
+    "experiment_id": "EXP_20261111_114600",
+    "experiment_name": "Automated_Test_Run",
+    "timestamp": "2026-11-11 11:46:00",
+    "dataset_name": "test_suite_dataset",
+    "sample_count": 6,
+    "feature_type": "resnet50",
+    "scaler_type": "standard",
+    "pca_config": {
+      "original_dimensions": 2048,
+      "reduced_dimensions": 3,
+      "compression_ratio": "99.85% reduction",
+      "explained_variance_total": "76.55%",
+      "first_pc_variance": 35.24,
+      "second_pc_variance": 23.63
+    },
+    "kmeans_config": {
+      "k": 3
+    },
+    "tsne_config": {},
+    "metrics": {
+      "k": 3,
+      "inertia_wcss": 933.12,
+      "silhouette_score": 0.3522,
+      "davies_bouldin_index": 0.3235,
+      "calinski_harabasz_score": 4.76,
+      "fit_time_seconds": 0.022,
+      "cluster_sizes": {
+        "Cluster_0": 1,
+        "Cluster_1": 4,
+        "Cluster_2": 1
+      },
+      "min_cluster_size": 1,
+      "max_cluster_size": 4
+    },
+    "notes": "Automated test validation"
   }
 ]
