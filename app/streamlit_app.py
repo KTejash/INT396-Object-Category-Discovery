@@ -338,6 +338,10 @@ elif selected_page == "2. Dataset Workspace":
             st.session_state.features_scaled = None
             st.session_state.features_pca = None
             st.session_state.cluster_labels = None
+            st.session_state.cluster_centroids = None
+            st.session_state.cluster_metrics = {}
+            st.session_state.tsne_coords = None
+            st.session_state.tsne_metadata = {}
             st.rerun()
 
         st.caption(f"Currently managing: **{chosen_ds}** ({len(st.session_state.manifest_df)} items in manifest)")
@@ -366,6 +370,14 @@ elif selected_page == "2. Dataset Workspace":
                 st.session_state.dataset_manager = DatasetManager(new_ds_name)
                 st.session_state.current_dataset_name = new_ds_name
                 st.session_state.manifest_df = st.session_state.dataset_manager.load_manifest()
+                st.session_state.features_raw = None
+                st.session_state.features_scaled = None
+                st.session_state.features_pca = None
+                st.session_state.cluster_labels = None
+                st.session_state.cluster_centroids = None
+                st.session_state.cluster_metrics = {}
+                st.session_state.tsne_coords = None
+                st.session_state.tsne_metadata = {}
                 st.rerun()
 
     st.markdown("---")

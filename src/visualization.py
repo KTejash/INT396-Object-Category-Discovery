@@ -77,11 +77,29 @@ def plot_embedding_2d_interactive(
     title: str = "2D Feature Embedding"
 ) -> go.Figure:
     """Builds interactive 2D scatter plot colored by cluster or label."""
+    if coords_2d is None or len(coords_2d) == 0:
+        fig = go.Figure()
+        fig.update_layout(title="No 2D coordinates available", **DARK_LAYOUT)
+        return fig
+
+    n_pts = len(coords_2d)
+
+    # Robust length synchronization: prevent mismatched state across datasets
+    if labels is not None and len(labels) == n_pts:
+        groups = [f"Cluster {c}" if isinstance(c, (int, np.integer)) else str(c) for c in labels]
+    else:
+        groups = [f"Sample" for _ in range(n_pts)]
+
+    if hover_names is not None and len(hover_names) == n_pts:
+        h_names = [str(x) for x in hover_names]
+    else:
+        h_names = [f"Item_{i}" for i in range(n_pts)]
+
     df_plot = pd.DataFrame({
         "Dim_1": coords_2d[:, 0],
         "Dim_2": coords_2d[:, 1],
-        "Group": [f"Cluster {c}" if isinstance(c, (int, np.integer)) else str(c) for c in (labels if labels is not None else np.zeros(len(coords_2d), dtype=int))],
-        "Image_ID": hover_names if hover_names is not None else [f"Img_{i}" for i in range(len(coords_2d))]
+        "Group": groups,
+        "Image_ID": h_names
     })
 
     fig = px.scatter(
